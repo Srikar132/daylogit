@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Daylog
 
-## Getting Started
+Self-hosted worklog. One Next.js app that's both:
 
-First, run the development server:
+1. An **MCP server** (`/api/mcp`) so Claude can log or query work mid-conversation.
+2. A **dashboard** (`/`) to browse, filter, and edit entries by hand.
+
+Single user, no accounts. See `CLAUDE.md` for the full spec.
+
+## Setup
 
 ```bash
+npm install
+cp .env.example .env.local   # fill in DATABASE_URL and WORKLOG_API_KEY
+npm run db:migrate           # apply schema to your Neon database
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- `DATABASE_URL` — Neon **pooled** connection string (the `-pooler` host).
+- `WORKLOG_API_KEY` — any long random secret; generate one with
+  `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`.
+  Required as a `Bearer` token on every `/api/mcp` and `/api/entries` request.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command                | Does                                     |
+| ---------------------- | ---------------------------------------- |
+| `npm run dev`          | Local dev server                         |
+| `npm run build`        | Production build                         |
+| `npm run lint`         | ESLint                                   |
+| `npm run format`       | Prettier — write                         |
+| `npm run format:check` | Prettier — check only (CI)               |
+| `npm test`             | Vitest, single run                       |
+| `npm run db:generate`  | Generate a Drizzle migration from schema |
+| `npm run db:migrate`   | Apply pending migrations                 |
+| `npm run db:studio`    | Drizzle Studio                           |
 
-## Learn More
+## Connecting an MCP client
 
-To learn more about Next.js, take a look at the following resources:
+```json
+{
+  "daylog": {
+    "url": "https://<your-deployment>.vercel.app/api/mcp",
+    "headers": { "Authorization": "Bearer <WORKLOG_API_KEY>" }
+  }
+}
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deploying
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Deploy target is Vercel. Set `DATABASE_URL` and `WORKLOG_API_KEY` as Vercel
+project env vars (never commit them) — see
+[Next.js deployment docs](https://nextjs.org/docs/app/building-your-application/deploying).
