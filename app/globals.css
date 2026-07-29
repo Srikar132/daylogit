@@ -4,12 +4,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-inter), "Inter", system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-inter), "Inter", system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -39,6 +40,10 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-surface: var(--surface);
+  --color-surface-container: var(--surface-container);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-google-blue: var(--google-blue);
   --color-project-rafttaar: var(--project-rafttaar);
   --color-project-creonex: var(--project-creonex);
   --color-project-bellcorps: var(--project-bellcorps);
@@ -48,15 +53,15 @@
   --color-category-meeting: var(--category-meeting);
   --color-category-design: var(--category-design);
   --color-category-debugging: var(--category-debugging);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) * 1.5);
+  --radius-2xl: calc(var(--radius) * 2);
+  --radius-full: 9999px;
 }
 
+/* ── Light (unused, forced dark) ───────────────────────────── */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -76,12 +81,12 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  --radius: 0.5rem;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -90,12 +95,10 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-
   --project-rafttaar: oklch(0.65 0.19 260);
   --project-creonex: oklch(0.72 0.16 165);
   --project-bellcorps: oklch(0.78 0.15 70);
   --project-other: oklch(0.68 0.06 300);
-
   --category-code: oklch(0.62 0.19 230);
   --category-analysis: oklch(0.62 0.19 300);
   --category-meeting: oklch(0.68 0.14 190);
@@ -103,38 +106,67 @@
   --category-debugging: oklch(0.62 0.2 25);
 }
 
+/* ── Google Material You — Dark ─────────────────────────────── */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* ── Surface system (MD3) ── */
+  --background:           #141414;       /* Deepest surface */
+  --surface:              #1e1e1e;       /* Surface / card   */
+  --surface-container:    #2a2a2a;       /* Elevated surface */
+  --on-surface-variant:   #9aa0a6;       /* Secondary text   */
+
+  /* ── Semantic tokens ── */
+  --foreground:           #e8eaed;       /* On-background    */
+  --card:                 #1e1e1e;
+  --card-foreground:      #e8eaed;
+  --popover:              #2d2d2d;
+  --popover-foreground:   #e8eaed;
+  --primary:              #8ab4f8;       /* Google Blue on dark */
+  --primary-foreground:   #202124;
+  --secondary:            #2a2a2a;
+  --secondary-foreground: #c4c7c5;
+  --muted:                #2a2a2a;
+  --muted-foreground:     #9aa0a6;
+  --accent:               #2d3748;
+  --accent-foreground:    #8ab4f8;
+  --destructive:          #f28b82;       /* Google Red on dark  */
+  --destructive-foreground: #202124;
+  --border:               rgba(255,255,255,0.08);
+  --input:                rgba(255,255,255,0.06);
+  --ring:                 #8ab4f8;
+  --google-blue:          #8ab4f8;
+
+  /* ── Charts ── */
+  --chart-1: #8ab4f8;
+  --chart-2: #81c995;
+  --chart-3: #fdd663;
+  --chart-4: #f28b82;
+  --chart-5: #c58af9;
+
+  /* ── Radius ── */
+  --radius: 0.5rem;
+
+  /* ── Sidebar ── */
+  --sidebar:                  #1e1e1e;
+  --sidebar-foreground:       #e8eaed;
+  --sidebar-primary:          #8ab4f8;
+  --sidebar-primary-foreground: #202124;
+  --sidebar-accent:           #2a2a2a;
+  --sidebar-accent-foreground:#e8eaed;
+  --sidebar-border:           rgba(255,255,255,0.08);
+  --sidebar-ring:             #8ab4f8;
+
+  /* ── Project chips — Google color palette ── */
+  --project-rafttaar:   #669df6;   /* Google Blue         */
+  --project-creonex:    #52d49c;   /* Google Green        */
+  --project-bellcorps:  #fdd663;   /* Google Yellow       */
+  --project-other:      #c58af9;   /* Google Purple       */
+
+  /* ── Category chips ── */
+  --category-code:      #669df6;   /* Blue   */
+  --category-analysis:  #c58af9;   /* Purple */
+  --category-meeting:   #52d49c;   /* Green  */
+  --category-design:    #f48fb1;   /* Pink   */
+  --category-debugging: #f28b82;   /* Red    */
 }
 
 @layer base {
@@ -143,8 +175,136 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: "Inter", "Google Sans", system-ui, -apple-system, sans-serif;
+    font-feature-settings: "cv02","cv03","cv04","cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
   html {
-    @apply font-sans;
+    font-family: "Inter", "Google Sans", system-ui, -apple-system, sans-serif;
   }
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Summary hover popover ──────────────────────────────────── */
+.summary-cell {
+  position: relative;
+  cursor: default;
+}
+
+.summary-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  min-width: 280px;
+  max-width: 420px;
+  background: #2d2d2d;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow:
+    0 8px 32px rgba(0,0,0,0.6),
+    0 2px 8px rgba(0,0,0,0.4);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+  will-change: opacity, transform;
+}
+
+.summary-cell:hover .summary-popover,
+.summary-popover:hover {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.summary-popover-scroll {
+  max-height: 200px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.summary-popover-text {
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #c4c7c5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Row hover ripple (Google-style) ───────────────────────── */
+.worklog-row {
+  position: relative;
+  transition: background-color 120ms ease;
+}
+.worklog-row::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: rgba(138, 180, 248, 0.04);
+  transition: opacity 120ms ease;
+}
+.worklog-row:hover::before {
+  opacity: 1;
+}
+
+/* ── Chip base ──────────────────────────────────────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 9999px;
+  padding: 2px 9px;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+/* ── Editable row ───────────────────────────────────────────── */
+.editing-row {
+  background: rgba(138, 180, 248, 0.04);
+  outline: 1px solid rgba(138, 180, 248, 0.2);
+  outline-offset: -1px;
+}
+
+/* ── Add button glow ────────────────────────────────────────── */
+.add-btn {
+  transition: all 180ms ease;
+}
+.add-btn:hover {
+  background: rgba(138, 180, 248, 0.1);
+  color: #8ab4f8;
+}
+
+/* ── Table header column ────────────────────────────────────── */
+.col-header {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #5f6368;
+  user-select: none;
 }
