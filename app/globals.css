@@ -43,6 +43,11 @@
   --color-project-creonex: var(--project-creonex);
   --color-project-bellcorps: var(--project-bellcorps);
   --color-project-other: var(--project-other);
+  --color-category-code: var(--category-code);
+  --color-category-analysis: var(--category-analysis);
+  --color-category-meeting: var(--category-meeting);
+  --color-category-design: var(--category-design);
+  --color-category-debugging: var(--category-debugging);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -90,6 +95,12 @@
   --project-creonex: oklch(0.72 0.16 165);
   --project-bellcorps: oklch(0.78 0.15 70);
   --project-other: oklch(0.68 0.06 300);
+
+  --category-code: oklch(0.62 0.19 230);
+  --category-analysis: oklch(0.62 0.19 300);
+  --category-meeting: oklch(0.68 0.14 190);
+  --category-design: oklch(0.68 0.19 350);
+  --category-debugging: oklch(0.62 0.2 25);
 }
 
 .dark {

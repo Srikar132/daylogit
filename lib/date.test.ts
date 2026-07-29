@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDaysIST, formatDateLabel, todayIST } from "./date";
+import { addDaysIST, formatDateLabel, formatFullDate, todayIST } from "./date";
 
 describe("todayIST", () => {
   it("returns a YYYY-MM-DD string", () => {
@@ -36,5 +36,11 @@ describe("formatDateLabel", () => {
 
   it("labels older dates as 'Mon D'", () => {
     expect(formatDateLabel("2020-01-01")).toBe("Jan 1");
+  });
+});
+
+describe("formatFullDate", () => {
+  it("formats as 'Month D, YYYY'", () => {
+    expect(formatFullDate("2026-07-29")).toBe("July 29, 2026");
   });
 });

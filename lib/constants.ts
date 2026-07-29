@@ -17,6 +17,14 @@ export const PROJECT_ACCENT_VAR: Record<Project, string> = {
   Other: "var(--project-other)",
 };
 
+export const CATEGORY_ACCENT_VAR: Record<Category, string> = {
+  Code: "var(--category-code)",
+  Analysis: "var(--category-analysis)",
+  Meeting: "var(--category-meeting)",
+  Design: "var(--category-design)",
+  Debugging: "var(--category-debugging)",
+};
+
 export const MIN_SUMMARY_LENGTH = 10;
 
 const FILLER_SUMMARIES = new Set([
