@@ -46,8 +46,11 @@ export async function createOrAppendEntry(input: {
     .onConflictDoUpdate({
       target: [entries.date, entries.project],
       set: {
-        summary: sql`${entries.summary} || E'\n' || EXCLUDED.summary`,
-        category: sql`(SELECT ARRAY(SELECT DISTINCT unnest(${entries.category} || EXCLUDED.category)))`,
+        // A soft-deleted row starts fresh on conflict — its old bullets stay
+        // deleted rather than silently reappearing merged with new content.
+        summary: sql`CASE WHEN ${entries.deletedAt} IS NOT NULL THEN EXCLUDED.summary ELSE ${entries.summary} || E'\n' || EXCLUDED.summary END`,
+        category: sql`CASE WHEN ${entries.deletedAt} IS NOT NULL THEN EXCLUDED.category ELSE (SELECT ARRAY(SELECT DISTINCT unnest(${entries.category} || EXCLUDED.category))) END`,
+        deletedAt: sql`NULL`,
         updatedAt: sql`now()`,
       },
     })

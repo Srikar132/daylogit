@@ -60,6 +60,26 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(afterDelete).toHaveLength(0);
     });
 
+    it("starts fresh instead of reviving a soft-deleted entry's old bullets", async () => {
+      const revived = await createOrAppendEntry({
+        project: "Other",
+        category: ["Meeting"],
+        summary: "integration test entry three",
+        date: TEST_DATE,
+      });
+
+      expect(revived.summary).toBe("- integration test entry three");
+      expect(revived.category).toEqual(["Meeting"]);
+      expect(revived.deletedAt).toBeNull();
+
+      const { rows } = await searchEntries({
+        project: "Other",
+        from: TEST_DATE,
+        to: TEST_DATE,
+      });
+      expect(rows).toHaveLength(1);
+    });
+
     it("rejects filler summaries", async () => {
       await expect(
         createOrAppendEntry({
