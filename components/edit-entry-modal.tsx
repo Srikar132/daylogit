@@ -102,9 +102,9 @@ export function EditEntryModal({
       {/* Modal Container — Spacious & Modern */}
       <div className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-white/10 bg-[#1e1e1e] p-6 sm:p-8 shadow-2xl transition-all animate-in zoom-in-95">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/8 pb-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#8ab4f8]/10 text-[#8ab4f8] shadow-inner">
+        <div className="flex items-start justify-between border-b border-white/8 pb-5">
+          <div className="flex items-center gap-3 pr-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[#8ab4f8]/10 text-[#8ab4f8] shadow-inner">
               <Sparkles className="h-5 w-5" />
             </div>
             <div>
@@ -122,9 +122,9 @@ export function EditEntryModal({
             type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="rounded-full p-2 text-[#9aa0a6] transition-colors hover:bg-white/5 hover:text-[#e8eaed]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#9aa0a6] transition-all hover:bg-white/10 hover:text-white"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4.5 w-4.5" />
           </button>
         </div>
 
