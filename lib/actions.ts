@@ -23,9 +23,11 @@ const createSchema = z.object({
 });
 
 function errorMessage(err: unknown): string {
+  console.error("Server Action Error:", err);
   if (err instanceof WorklogError) return err.message;
   if (err instanceof z.ZodError)
     return err.issues[0]?.message ?? "Invalid input.";
+  if (err instanceof Error) return err.message;
   return "Something went wrong. Please try again.";
 }
 

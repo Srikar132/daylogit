@@ -1,32 +1,48 @@
-import { WorklogTable } from "@/components/worklog-table";
-import { getRecentEntries } from "@/lib/worklog";
-import { ClipboardList } from "lucide-react";
+import { WorklogDashboard } from "@/components/worklog-dashboard";
+import { getPaginatedEntries } from "@/lib/worklog";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
-  const entries = await getRecentEntries();
+interface HomePageProps {
+  searchParams?: Promise<{
+    page?: string;
+    pageSize?: string;
+    q?: string;
+    project?: string;
+    today?: string;
+    date?: string;
+  }>;
+}
+
+export default async function Home(props: HomePageProps) {
+  const searchParams = (await props.searchParams) ?? {};
+
+  const page = Number(searchParams.page) || 1;
+  const pageSize = Number(searchParams.pageSize) || 10;
+  const search = typeof searchParams.q === "string" ? searchParams.q : undefined;
+  const project = typeof searchParams.project === "string" ? searchParams.project : undefined;
+  const isToday = searchParams.today === "true";
+  const dateFilter = typeof searchParams.date === "string" ? searchParams.date : undefined;
+
+  const { entries, totalCount, totalPages } = await getPaginatedEntries({
+    page,
+    pageSize,
+    search,
+    project,
+    filterToday: isToday,
+    date: dateFilter,
+  });
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-6 py-8">
-      {/* ── Page header ── */}
-      <header className="mb-6 flex items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#8ab4f8]/10">
-          <ClipboardList className="h-4 w-4 text-[#8ab4f8]" />
-        </div>
-        <div>
-          <h1 className="text-[15px] font-semibold tracking-tight text-[#e8eaed]">
-            Worklog
-          </h1>
-          <p className="text-[11px] text-[#5f6368]">
-            {entries.length > 0
-              ? `${entries.length} entr${entries.length === 1 ? "y" : "ies"}`
-              : "No entries yet"}
-          </p>
-        </div>
-      </header>
-
-      <WorklogTable entries={entries} />
-    </div>
+    <WorklogDashboard
+      entries={entries}
+      totalCount={totalCount}
+      totalPages={totalPages}
+      page={page}
+      pageSize={pageSize}
+      currentProject={project}
+      isToday={isToday}
+      currentDate={dateFilter}
+    />
   );
 }

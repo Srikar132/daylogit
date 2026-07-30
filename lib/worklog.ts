@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, count, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-orm";
 import { db, entries } from "@/lib/db";
 import { addDaysIST, todayIST } from "@/lib/date";
 import { isFillerSummary, type Category, type Project } from "@/lib/constants";
@@ -61,7 +61,81 @@ export async function getRecentEntries(): Promise<EntryRow[]> {
     .select()
     .from(entries)
     .where(and(isNull(entries.deletedAt), gte(entries.date, cutoff)))
-    .orderBy(desc(entries.date), entries.project);
+    .orderBy(desc(entries.updatedAt), desc(entries.date));
+}
+
+/** Paginated entries for server-side dashboard table view (latest first). */
+export async function getPaginatedEntries(options?: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  project?: string;
+  filterToday?: boolean;
+  date?: string;
+}): Promise<{
+  entries: EntryRow[];
+  totalCount: number;
+  totalPages: number;
+  page: number;
+  pageSize: number;
+}> {
+  const page = Math.max(1, options?.page ?? 1);
+  const pageSize = Math.max(1, Math.min(100, options?.pageSize ?? 10));
+  const offset = (page - 1) * pageSize;
+
+  const conditions = [isNull(entries.deletedAt)];
+
+  if (options?.project && options.project !== "all") {
+    conditions.push(eq(entries.project, options.project));
+  }
+
+  if (options?.filterToday) {
+    conditions.push(eq(entries.date, todayIST()));
+  }
+
+  if (options?.date && options.date.trim() !== "") {
+    conditions.push(eq(entries.date, options.date.trim()));
+  }
+
+  if (options?.search && options.search.trim() !== "") {
+    const searchTrimmed = options.search.trim();
+    const term = `%${searchTrimmed}%`;
+    const searchCondition = or(
+      ilike(entries.summary, term),
+      ilike(entries.project, term),
+      ilike(sql<string>`${entries.date}::text`, term),
+      ilike(sql<string>`to_char(${entries.date}, 'DD Mon YYYY Month')`, term),
+    );
+    if (searchCondition) {
+      conditions.push(searchCondition);
+    }
+  }
+
+  const whereClause = and(...conditions);
+
+  const [countResult] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(entries)
+    .where(whereClause);
+
+  const totalCount = Number(countResult?.count ?? 0);
+  const totalPages = Math.ceil(totalCount / pageSize) || 1;
+
+  const rows = await db
+    .select()
+    .from(entries)
+    .where(whereClause)
+    .orderBy(desc(entries.updatedAt), desc(entries.createdAt), desc(entries.date))
+    .limit(pageSize)
+    .offset(offset);
+
+  return {
+    entries: rows,
+    totalCount,
+    totalPages,
+    page,
+    pageSize,
+  };
 }
 
 export async function searchEntries(input: {
