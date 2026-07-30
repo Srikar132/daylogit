@@ -51,48 +51,12 @@ const COLUMNS = [
   { label: "Summary", icon: AlignLeft },
 ] as const;
 
-/** Strip leading bullet, collapse newline-bullets into dots */
-function shortSummary(summary: string, max: number): string {
-  const clean = summary.replace(/^- /, "").replace(/\n- /g, " · ");
-  return clean.length > max ? `${clean.slice(0, max)}…` : clean;
-}
-
-/** Format summary for full popover display */
-function formatFullSummary(summary: string): string {
-  // Keep bullet points but make them readable
-  return summary.replace(/^- /gm, "• ").trim();
-}
-
-/* ── Summary Popover ──────────────────────────────────────── */
-function SummaryCell({ summary }: { summary: string }) {
-  const short = shortSummary(summary, 55);
-  const isTruncated = summary.replace(/^- /, "").replace(/\n- /g, " · ").length > 55;
-  const full = formatFullSummary(summary);
-
-  if (!isTruncated) {
-    return (
-      <span className="text-[13px] text-[#9aa0a6]">{short}</span>
-    );
-  }
-
-  return (
-    <div className="summary-cell">
-      <span className="text-[13px] text-[#9aa0a6]">{short}</span>
-      {/* Popover */}
-      <div className="summary-popover" role="tooltip">
-        {/* Arrow indicator */}
-        <div className="mb-2 flex items-center gap-1.5 border-b border-white/8 pb-2">
-          <AlignLeft className="h-3 w-3 text-[#8ab4f8]" />
-          <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#5f6368]">
-            Full Summary
-          </span>
-        </div>
-        <div className="summary-popover-scroll">
-          <p className="summary-popover-text">{full}</p>
-        </div>
-      </div>
-    </div>
-  );
+/** Split a possibly-merged multi-bullet summary into individual log lines */
+function splitBullets(summary: string): string[] {
+  return summary
+    .split("\n")
+    .map((line) => line.replace(/^- /, "").trim())
+    .filter(Boolean);
 }
 
 /* ── Row Form (hidden, handles server action lifecycle) ───── */
@@ -236,27 +200,28 @@ function EditableRow({
 /* ── Display Row ──────────────────────────────────────────── */
 function DisplayRow({
   entry,
+  bullet,
   onEdit,
   onDelete,
 }: {
   entry: EntryRow;
+  bullet: string;
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  // Derive a "name" — project + first meaningful words of summary
-  const namePart = shortSummary(entry.summary, 28);
+  const namePart = bullet.length > 28 ? `${bullet.slice(0, 28)}…` : bullet;
 
   return (
     <tr className="worklog-row group border-b border-white/5 last:border-b-0">
       {/* Name */}
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 align-top">
         <span className="text-[13px] font-medium text-[#e8eaed]">
           {entry.project} — {namePart}
         </span>
       </td>
 
       {/* Category chips */}
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 align-top">
         <div className="flex flex-wrap gap-1">
           {entry.category.map((cat) => (
             <CategoryTag key={cat} category={cat as Category} />
@@ -265,20 +230,22 @@ function DisplayRow({
       </td>
 
       {/* Date */}
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 align-top">
         <span className="text-[12.5px] tabular-nums text-[#5f6368]">
           {formatFullDate(entry.date)}
         </span>
       </td>
 
       {/* Project chip */}
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 align-top">
         <ProjectTag project={entry.project as Project} />
       </td>
 
-      {/* Summary — truncated + hover popover */}
-      <td className="max-w-[240px] px-4 py-3">
-        <SummaryCell summary={entry.summary} />
+      {/* Summary — full text, no truncation, no hover popover */}
+      <td className="max-w-[360px] px-4 py-3 align-top">
+        <span className="whitespace-pre-wrap break-words text-[13px] text-[#9aa0a6]">
+          {bullet}
+        </span>
       </td>
 
       {/* Row actions */}
@@ -439,24 +406,28 @@ export function WorklogTable({ entries }: { entries: EntryRow[] }) {
               />
             )}
 
-            {/* Existing entries */}
-            {entries.map((entry) =>
-              editingId === entry.id ? (
-                <EditableRow
-                  key={entry.id}
-                  formId={`edit-entry-form-${entry.id}`}
-                  entry={entry}
-                  onCancel={() => setEditingId(null)}
-                />
-              ) : (
+            {/* Existing entries — one row per logged bullet, not per DB row */}
+            {entries.map((entry) => {
+              if (editingId === entry.id) {
+                return (
+                  <EditableRow
+                    key={entry.id}
+                    formId={`edit-entry-form-${entry.id}`}
+                    entry={entry}
+                    onCancel={() => setEditingId(null)}
+                  />
+                );
+              }
+              return splitBullets(entry.summary).map((bullet, i) => (
                 <DisplayRow
-                  key={entry.id}
+                  key={`${entry.id}-${i}`}
                   entry={entry}
+                  bullet={bullet}
                   onEdit={() => openEdit(entry.id)}
                   onDelete={() => handleDelete(entry.id)}
                 />
-              ),
-            )}
+              ));
+            })}
 
             {/* Empty state */}
             {entries.length === 0 && !addOpen && (

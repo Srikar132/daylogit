@@ -201,56 +201,6 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
-/* ── Summary hover popover ──────────────────────────────────── */
-.summary-cell {
-  position: relative;
-  cursor: default;
-}
-
-.summary-popover {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 50;
-  min-width: 280px;
-  max-width: 420px;
-  background: #2d2d2d;
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 12px;
-  padding: 12px 14px;
-  box-shadow:
-    0 8px 32px rgba(0,0,0,0.6),
-    0 2px 8px rgba(0,0,0,0.4);
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-4px);
-  transition:
-    opacity 160ms ease,
-    transform 160ms ease;
-  will-change: opacity, transform;
-}
-
-.summary-cell:hover .summary-popover,
-.summary-popover:hover {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
-}
-
-.summary-popover-scroll {
-  max-height: 200px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.summary-popover-text {
-  font-size: 12.5px;
-  line-height: 1.65;
-  color: #c4c7c5;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
 /* ── Row hover ripple (Google-style) ───────────────────────── */
 .worklog-row {
   position: relative;
