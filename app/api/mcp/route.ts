@@ -76,7 +76,7 @@ const handler = createMcpHandler(
         const text = rows
           .map(
             (row) =>
-              `${row.project} (${row.category.join(", ")}):\n${row.summary}`,
+              `[id: ${row.id}] ${row.project} (${row.category.join(", ")}):\n${row.summary}`,
           )
           .join("\n\n");
 
@@ -127,7 +127,7 @@ const handler = createMcpHandler(
         const text = rows
           .map(
             (row) =>
-              `${row.date} — ${row.project} (${row.category.join(", ")})\n${previewSummary(row.summary)}`,
+              `[id: ${row.id}] ${row.date} — ${row.project} (${row.category.join(", ")})\n${previewSummary(row.summary)}`,
           )
           .join("\n\n");
 

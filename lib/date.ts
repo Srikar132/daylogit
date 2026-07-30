@@ -20,6 +20,12 @@ const fullDateFormatter = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
+const timeFormatter = new Intl.DateTimeFormat("en-US", {
+  timeZone: TIME_ZONE,
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 /**
  * "Today" in IST as a "YYYY-MM-DD" string. The server may run in UTC, so this
  * must be the only place `new Date()` is used to derive "today" — never
@@ -50,4 +56,9 @@ export function formatDateLabel(dateStr: string): string {
 /** Full date for the table view: "July 29, 2026". */
 export function formatFullDate(dateStr: string): string {
   return fullDateFormatter.format(new Date(`${dateStr}T00:00:00Z`));
+}
+
+/** IST clock time for a timestamp, e.g. "6:45 PM". Reflects when the row was last logged/updated. */
+export function formatTime(timestamp: Date | string): string {
+  return timeFormatter.format(new Date(timestamp));
 }

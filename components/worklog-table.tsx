@@ -19,6 +19,11 @@ import { CategoryTag } from "@/components/category-tag";
 import { ProjectTag } from "@/components/project-tag";
 import { Button } from "@/components/ui/button";
 import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -38,7 +43,7 @@ import {
   type Category,
   type Project,
 } from "@/lib/constants";
-import { formatFullDate } from "@/lib/date";
+import { formatFullDate, formatTime } from "@/lib/date";
 import type { EntryRow } from "@/lib/worklog";
 
 const initialState: ActionState = {};
@@ -57,6 +62,30 @@ function splitBullets(summary: string): string[] {
     .split("\n")
     .map((line) => line.replace(/^- /, "").trim())
     .filter(Boolean);
+}
+
+/** Clamp to 2 lines; hover reveals the full text in a scrollable card (portaled, so it's never clipped by an ancestor). */
+function SummaryCell({ text }: { text: string }) {
+  return (
+    <HoverCard>
+      <HoverCardTrigger className="line-clamp-2 text-[13px] whitespace-pre-wrap break-words text-[#9aa0a6]">
+        {text}
+      </HoverCardTrigger>
+      <HoverCardContent align="start" sideOffset={8} className="w-[360px] p-3.5">
+        <div className="mb-2 flex items-center gap-1.5 border-b border-white/8 pb-2">
+          <AlignLeft className="h-3 w-3 text-[#8ab4f8]" />
+          <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[#5f6368]">
+            Full summary
+          </span>
+        </div>
+        <div className="max-h-56 overflow-y-auto pr-1">
+          <p className="text-[12.5px] leading-relaxed whitespace-pre-wrap break-words text-[#c4c7c5]">
+            {text}
+          </p>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
 }
 
 /* ── Row Form (hidden, handles server action lifecycle) ───── */
@@ -229,10 +258,13 @@ function DisplayRow({
         </div>
       </td>
 
-      {/* Date */}
+      {/* Date + time logged */}
       <td className="px-4 py-3 align-top">
-        <span className="text-[12.5px] tabular-nums text-[#5f6368]">
+        <span className="block text-[12.5px] tabular-nums text-[#5f6368]">
           {formatFullDate(entry.date)}
+        </span>
+        <span className="block text-[11px] tabular-nums text-[#5f6368]/70">
+          {formatTime(entry.updatedAt)}
         </span>
       </td>
 
@@ -241,11 +273,9 @@ function DisplayRow({
         <ProjectTag project={entry.project as Project} />
       </td>
 
-      {/* Summary — full text, no truncation, no hover popover */}
+      {/* Summary — clamped to 2 lines, hover for full scrollable text */}
       <td className="max-w-[360px] px-4 py-3 align-top">
-        <span className="whitespace-pre-wrap break-words text-[13px] text-[#9aa0a6]">
-          {bullet}
-        </span>
+        <SummaryCell text={bullet} />
       </td>
 
       {/* Row actions */}
