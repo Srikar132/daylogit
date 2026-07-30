@@ -55,7 +55,7 @@ export async function createEntryAction(
 }
 
 const updateSchema = z.object({
-  id: z.uuid(),
+  id: z.string().uuid(),
   project: z.enum(PROJECTS),
   category: z.array(z.enum(CATEGORIES)).min(1, "Pick at least one category."),
   summary: z.string(),
@@ -88,7 +88,7 @@ export async function updateEntryAction(
 }
 
 export async function deleteEntryAction(formData: FormData): Promise<void> {
-  const id = z.uuid().parse(formData.get("id"));
+  const id = z.string().uuid().parse(formData.get("id"));
   await softDeleteEntry(id);
   revalidatePath("/");
 }

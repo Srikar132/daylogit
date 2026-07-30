@@ -6,20 +6,11 @@ import { isFillerSummary, type Category, type Project } from "@/lib/constants";
 export type EntryRow = typeof entries.$inferSelect;
 
 const SUMMARY_PREVIEW_LENGTH = 200;
-const UNIQUE_VIOLATION = "23505";
 const DASHBOARD_WINDOW_DAYS = 30;
 
 export class WorklogError extends Error {}
 
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: unknown }).code === UNIQUE_VIOLATION
-  );
-}
-
+/** Create a new independent log entry row (no merging, no upsert). */
 export async function createOrAppendEntry(input: {
   project: Project;
   category: Category[];
@@ -41,18 +32,7 @@ export async function createOrAppendEntry(input: {
       date: entryDate,
       project: input.project,
       category: dedupedCategory,
-      summary: `- ${input.summary.trim()}`,
-    })
-    .onConflictDoUpdate({
-      target: [entries.date, entries.project],
-      set: {
-        // A soft-deleted row starts fresh on conflict — its old bullets stay
-        // deleted rather than silently reappearing merged with new content.
-        summary: sql`CASE WHEN ${entries.deletedAt} IS NOT NULL THEN EXCLUDED.summary ELSE ${entries.summary} || E'\n' || EXCLUDED.summary END`,
-        category: sql`CASE WHEN ${entries.deletedAt} IS NOT NULL THEN EXCLUDED.category ELSE (SELECT ARRAY(SELECT DISTINCT unnest(${entries.category} || EXCLUDED.category))) END`,
-        deletedAt: sql`NULL`,
-        updatedAt: sql`now()`,
-      },
+      summary: input.summary.trim(),
     })
     .returning();
 
@@ -73,7 +53,7 @@ export async function getTodayEntries(): Promise<{
   return { date, rows };
 }
 
-/** Rows for the dashboard's default view — last 30 days, most recent first. No pagination by design. */
+/** Rows for the dashboard's default view — last 30 days, most recent first. */
 export async function getRecentEntries(): Promise<EntryRow[]> {
   const cutoff = addDaysIST(todayIST(), -DASHBOARD_WINDOW_DAYS);
 
@@ -110,7 +90,7 @@ export async function searchEntries(input: {
   return { rows, limit, offset };
 }
 
-/** Truncates a summary for list/search views — never render full history inline. */
+/** Truncates a summary for list/search views. */
 export function previewSummary(summary: string): string {
   return summary.length > SUMMARY_PREVIEW_LENGTH
     ? `${summary.slice(0, SUMMARY_PREVIEW_LENGTH)}…`
@@ -143,31 +123,22 @@ export async function updateEntry(
     );
   }
 
-  try {
-    const [row] = await db
-      .update(entries)
-      .set({
-        ...(patch.project !== undefined && { project: patch.project }),
-        ...(patch.category !== undefined && {
-          category: Array.from(new Set(patch.category)),
-        }),
-        ...(patch.summary !== undefined && { summary: patch.summary.trim() }),
-        updatedAt: sql`now()`,
-      })
-      .where(and(eq(entries.id, id), isNull(entries.deletedAt)))
-      .returning();
+  const [row] = await db
+    .update(entries)
+    .set({
+      ...(patch.project !== undefined && { project: patch.project }),
+      ...(patch.category !== undefined && {
+        category: Array.from(new Set(patch.category)),
+      }),
+      ...(patch.summary !== undefined && { summary: patch.summary.trim() }),
+      updatedAt: sql`now()`,
+    })
+    .where(and(eq(entries.id, id), isNull(entries.deletedAt)))
+    .returning();
 
-    if (!row) {
-      throw new WorklogError(`No active entry found with id ${id}.`);
-    }
-
-    return row;
-  } catch (err) {
-    if (isUniqueViolation(err)) {
-      throw new WorklogError(
-        "An entry for that date and project already exists.",
-      );
-    }
-    throw err;
+  if (!row) {
+    throw new WorklogError(`No active entry found with id ${id}.`);
   }
+
+  return row;
 }

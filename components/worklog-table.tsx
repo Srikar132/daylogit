@@ -3,7 +3,6 @@
 import {
   AlignLeft,
   Calendar,
-  Code2,
   List,
   Pencil,
   Plus,
@@ -56,15 +55,7 @@ const COLUMNS = [
   { label: "Summary", icon: AlignLeft },
 ] as const;
 
-/** Split a possibly-merged multi-bullet summary into individual log lines */
-function splitBullets(summary: string): string[] {
-  return summary
-    .split("\n")
-    .map((line) => line.replace(/^- /, "").trim())
-    .filter(Boolean);
-}
-
-/** Clamp to 2 lines; hover reveals the full text in a scrollable card (portaled, so it's never clipped by an ancestor). */
+/** Clamp to 2 lines; hover reveals the full text in a scrollable card. */
 function SummaryCell({ text }: { text: string }) {
   return (
     <HoverCard>
@@ -120,6 +111,21 @@ function EditableRow({
   entry?: EntryRow;
   onCancel: () => void;
 }) {
+  // Multi-select category state — pre-fill with all current categories
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(
+    entry?.category ?? [CATEGORIES[0]],
+  );
+
+  function toggleCategory(cat: string) {
+    setSelectedCategories((prev) =>
+      prev.includes(cat)
+        ? prev.length === 1
+          ? prev // must keep at least one
+          : prev.filter((c) => c !== cat)
+        : [...prev, cat],
+    );
+  }
+
   return (
     <tr className="editing-row border-b border-white/5">
       {/* Name / status label */}
@@ -129,28 +135,38 @@ function EditableRow({
         </span>
       </td>
 
-      {/* Category select */}
+      {/* Category — click-to-toggle chips */}
       <td className="px-4 py-3 align-top">
-        <Select
-          form={formId}
-          name="category"
-          defaultValue={entry?.category[0] ?? CATEGORIES[0]}
-        >
-          <SelectTrigger className="h-7 w-[120px] border-white/10 bg-white/5 text-[12px] text-[#c4c7c5]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="border-white/10 bg-[#2d2d2d] text-[#c4c7c5]">
-            {CATEGORIES.map((category) => (
-              <SelectItem
-                key={category}
-                value={category}
-                className="text-[12px] focus:bg-[#8ab4f8]/10 focus:text-[#8ab4f8]"
+        {/* Hidden inputs carry selected values to the server action */}
+        {selectedCategories.map((cat) => (
+          <input key={cat} type="hidden" form={formId} name="category" value={cat} />
+        ))}
+        <div className="flex flex-wrap gap-1">
+          {CATEGORIES.map((cat) => {
+            const active = selectedCategories.includes(cat);
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => toggleCategory(cat)}
+                className="chip transition-opacity"
+                style={{
+                  opacity: active ? 1 : 0.35,
+                  backgroundColor: active
+                    ? `color-mix(in srgb, var(--category-${cat.toLowerCase()}) 14%, transparent)`
+                    : "rgba(255,255,255,0.04)",
+                  color: active ? `var(--category-${cat.toLowerCase()})` : "#5f6368",
+                  border: active
+                    ? `1px solid color-mix(in srgb, var(--category-${cat.toLowerCase()}) 25%, transparent)`
+                    : "1px solid rgba(255,255,255,0.08)",
+                  cursor: "pointer",
+                }}
               >
-                {category}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+                {cat}
+              </button>
+            );
+          })}
+        </div>
       </td>
 
       {/* Date — always Today */}
@@ -229,20 +245,21 @@ function EditableRow({
 /* ── Display Row ──────────────────────────────────────────── */
 function DisplayRow({
   entry,
-  bullet,
   onEdit,
   onDelete,
 }: {
   entry: EntryRow;
-  bullet: string;
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const namePart = bullet.length > 28 ? `${bullet.slice(0, 28)}…` : bullet;
+  const namePart =
+    entry.summary.length > 50
+      ? `${entry.summary.slice(0, 50)}…`
+      : entry.summary;
 
   return (
     <tr className="worklog-row group border-b border-white/5 last:border-b-0">
-      {/* Name */}
+      {/* Name — project + summary preview */}
       <td className="px-4 py-3 align-top">
         <span className="text-[13px] font-medium text-[#e8eaed]">
           {entry.project} — {namePart}
@@ -273,9 +290,9 @@ function DisplayRow({
         <ProjectTag project={entry.project as Project} />
       </td>
 
-      {/* Summary — clamped to 2 lines, hover for full scrollable text */}
-      <td className="max-w-[360px] px-4 py-3 align-top">
-        <SummaryCell text={bullet} />
+      {/* Summary — clamped to 2 lines, hover for full text */}
+      <td className="px-4 py-3 align-top">
+        <SummaryCell text={entry.summary} />
       </td>
 
       {/* Row actions */}
@@ -394,7 +411,17 @@ export function WorklogTable({ entries }: { entries: EntryRow[] }) {
             "0 1px 3px rgba(0,0,0,0.3), 0 4px 16px rgba(0,0,0,0.2)",
         }}
       >
-        <table className="w-full border-collapse">
+        <table className="w-full border-collapse table-fixed">
+          {/* ── Fixed column widths — keeps header aligned with data ── */}
+          <colgroup>
+            <col style={{ width: "26%" }} />{/* Name */}
+            <col style={{ width: "14%" }} />{/* Category */}
+            <col style={{ width: "14%" }} />{/* Date */}
+            <col style={{ width: "12%" }} />{/* Project */}
+            <col style={{ width: "28%" }} />{/* Summary */}
+            <col style={{ width: "6%" }}  />{/* Actions */}
+          </colgroup>
+
           {/* ── Header ── */}
           <thead>
             <tr
@@ -436,7 +463,7 @@ export function WorklogTable({ entries }: { entries: EntryRow[] }) {
               />
             )}
 
-            {/* Existing entries — one row per logged bullet, not per DB row */}
+            {/* One row per DB entry — no bullet splitting */}
             {entries.map((entry) => {
               if (editingId === entry.id) {
                 return (
@@ -448,15 +475,14 @@ export function WorklogTable({ entries }: { entries: EntryRow[] }) {
                   />
                 );
               }
-              return splitBullets(entry.summary).map((bullet, i) => (
+              return (
                 <DisplayRow
-                  key={`${entry.id}-${i}`}
+                  key={entry.id}
                   entry={entry}
-                  bullet={bullet}
                   onEdit={() => openEdit(entry.id)}
                   onDelete={() => handleDelete(entry.id)}
                 />
-              ));
+              );
             })}
 
             {/* Empty state */}
