@@ -34,7 +34,7 @@ export function RowActions({ entry }: RowActionsProps) {
           <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
-
+      
       {/* Edit Entry Modal */}
       <EditEntryModal
         isOpen={isEditOpen}
