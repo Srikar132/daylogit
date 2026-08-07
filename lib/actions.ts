@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { CATEGORIES, PROJECTS } from "@/lib/constants";
 import {
   WorklogError,
   createOrAppendEntry,
@@ -13,9 +12,8 @@ import {
 export type ActionState = { error?: string };
 
 const createSchema = z.object({
-  project: z.enum(PROJECTS),
-  category: z.array(z.enum(CATEGORIES)).min(1, "Pick at least one category."),
-  summary: z.string(),
+  title: z.string().optional(),
+  summary: z.string().min(1, "Summary is required."),
   date: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -36,8 +34,7 @@ export async function createEntryAction(
   formData: FormData,
 ): Promise<ActionState> {
   const parsed = createSchema.safeParse({
-    project: formData.get("project"),
-    category: formData.getAll("category"),
+    title: formData.get("title") || undefined,
     summary: formData.get("summary"),
     date: formData.get("date") || undefined,
   });
@@ -58,9 +55,8 @@ export async function createEntryAction(
 
 const updateSchema = z.object({
   id: z.string().uuid(),
-  project: z.enum(PROJECTS),
-  category: z.array(z.enum(CATEGORIES)).min(1, "Pick at least one category."),
-  summary: z.string(),
+  title: z.string().optional(),
+  summary: z.string().min(1, "Summary is required."),
 });
 
 export async function updateEntryAction(
@@ -69,8 +65,7 @@ export async function updateEntryAction(
 ): Promise<ActionState> {
   const parsed = updateSchema.safeParse({
     id: formData.get("id"),
-    project: formData.get("project"),
-    category: formData.getAll("category"),
+    title: formData.get("title") || undefined,
     summary: formData.get("summary"),
   });
 

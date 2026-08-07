@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { hasValidApiKey } from "@/lib/auth";
-import { CATEGORIES, PROJECTS } from "@/lib/constants";
 import {
   WorklogError,
   searchEntries,
@@ -14,7 +13,6 @@ function unauthorized(): NextResponse {
 }
 
 const searchParamsSchema = z.object({
-  project: z.enum(PROJECTS).optional(),
   from: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -32,7 +30,6 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   const { searchParams } = new URL(request.url);
   const parsed = searchParamsSchema.safeParse({
-    project: searchParams.get("project") ?? undefined,
     from: searchParams.get("from") ?? undefined,
     to: searchParams.get("to") ?? undefined,
     limit: searchParams.get("limit") ?? undefined,
@@ -51,9 +48,8 @@ export async function GET(request: Request): Promise<NextResponse> {
 }
 
 const patchBodySchema = z.object({
-  id: z.uuid(),
-  project: z.enum(PROJECTS).optional(),
-  category: z.array(z.enum(CATEGORIES)).min(1).optional(),
+  id: z.string().uuid(),
+  title: z.string().optional(),
   summary: z.string().optional(),
 });
 
@@ -82,7 +78,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
   }
 }
 
-const deleteBodySchema = z.object({ id: z.uuid() });
+const deleteBodySchema = z.object({ id: z.string().uuid() });
 
 export async function DELETE(request: Request): Promise<NextResponse> {
   if (!hasValidApiKey(request)) return unauthorized();

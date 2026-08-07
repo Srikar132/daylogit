@@ -85,25 +85,53 @@ export async function createSection(name: string, date?: string): Promise<Sectio
   }
 }
 
+/** Update section title by id or current name */
+export async function updateSection(
+  idOrName: string,
+  newName: string,
+): Promise<SectionRow> {
+  const trimmedNewName = newName.trim();
+  if (!trimmedNewName) {
+    throw new WorklogError("New section title cannot be empty.");
+  }
 
-/** Toggle task completion status */
-export async function toggleEntryCompletion(
-  id: string,
-  completed: boolean,
-): Promise<EntryRow> {
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      idOrName.trim(),
+    );
+
+  let existing: SectionRow | undefined;
+
+  if (isUuid) {
+    const [row] = await db
+      .select()
+      .from(sections)
+      .where(eq(sections.id, idOrName.trim()))
+      .limit(1);
+    existing = row;
+  }
+
+  if (!existing) {
+    const [row] = await db
+      .select()
+      .from(sections)
+      .where(eq(sections.name, idOrName.trim()))
+      .limit(1);
+    existing = row;
+  }
+
+  if (!existing) {
+    throw new WorklogError(`Section not found: ${idOrName}`);
+  }
+
   const [updated] = await db
-    .update(entries)
+    .update(sections)
     .set({
-      completed,
-      completedAt: completed ? sql`now()` : null,
+      name: trimmedNewName,
       updatedAt: sql`now()`,
     })
-    .where(and(eq(entries.id, id), isNull(entries.deletedAt)))
+    .where(eq(sections.id, existing.id))
     .returning();
-
-  if (!updated) {
-    throw new WorklogError(`Entry not found: ${id}`);
-  }
 
   return updated;
 }
@@ -111,15 +139,33 @@ export async function toggleEntryCompletion(
 /** Move a log entry to a different section column */
 export async function moveEntryToSection(
   id: string,
-  sectionName: string,
+  targetSection: string,
 ): Promise<EntryRow> {
-  const trimmedSection = sectionName.trim();
-  await createSection(trimmedSection);
+  const trimmed = targetSection.trim();
+  let targetSec: SectionRow | undefined;
+
+  const isUuid =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      trimmed,
+    );
+
+  if (isUuid) {
+    const [row] = await db
+      .select()
+      .from(sections)
+      .where(eq(sections.id, trimmed))
+      .limit(1);
+    targetSec = row;
+  }
+
+  if (!targetSec) {
+    targetSec = await createSection(trimmed);
+  }
 
   const [updated] = await db
     .update(entries)
     .set({
-      sectionName: trimmedSection,
+      sectionId: targetSec.id,
       updatedAt: sql`now()`,
     })
     .where(and(eq(entries.id, id), isNull(entries.deletedAt)))
@@ -134,10 +180,9 @@ export async function moveEntryToSection(
 
 /** Create a new independent log entry row (no merging, no upsert). */
 export async function createOrAppendEntry(input: {
-  project?: Project | string;
-  category?: Category[];
   title?: string;
   summary: string;
+  sectionId?: string;
   sectionName?: string;
   date?: string;
 }): Promise<EntryRow> {
@@ -148,41 +193,42 @@ export async function createOrAppendEntry(input: {
   }
 
   const entryDate = input.date ?? todayIST();
-  const dedupedCategory = Array.from(new Set(input.category ?? ["general" as Category]));
-  const projectVal = (input.project as Project) ?? "General";
-  
-  // If sectionName is omitted, default to "Today" for today's date, or date string e.g. "2026-08-05" for other dates
-  let sectionVal = input.sectionName?.trim();
-  if (!sectionVal) {
-    if (entryDate === todayIST()) {
-      sectionVal = "Today";
-    } else {
-      sectionVal = entryDate;
+  let secRow: SectionRow | undefined;
+
+  if (input.sectionId) {
+    const isUuid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        input.sectionId.trim(),
+      );
+    if (isUuid) {
+      const [found] = await db
+        .select()
+        .from(sections)
+        .where(eq(sections.id, input.sectionId.trim()))
+        .limit(1);
+      secRow = found;
     }
   }
 
-  const titleVal = input.title?.trim() || input.summary.split("\n")[0].slice(0, 80);
+  if (!secRow) {
+    const sName = input.sectionName?.trim() || "My Tasks";
+    secRow = await createSection(sName, entryDate);
+  }
 
-  // Auto-create section if it doesn't exist yet
-  await createSection(sectionVal, entryDate);
+  const titleVal = input.title?.trim() || input.summary.split("\n")[0].slice(0, 80);
 
   const [row] = await db
     .insert(entries)
     .values({
       date: entryDate,
-      project: projectVal,
-      category: dedupedCategory,
       title: titleVal,
       summary: input.summary.trim(),
-      sectionName: sectionVal,
-      completed: false,
+      sectionId: secRow.id,
     })
     .returning();
 
   return row;
 }
-
-
 
 export async function getTodayEntries(): Promise<{
   date: string;
@@ -193,7 +239,7 @@ export async function getTodayEntries(): Promise<{
     .select()
     .from(entries)
     .where(and(eq(entries.date, date), isNull(entries.deletedAt)))
-    .orderBy(entries.project);
+    .orderBy(desc(entries.createdAt));
 
   return { date, rows };
 }
@@ -214,7 +260,6 @@ export async function getPaginatedEntries(options?: {
   page?: number;
   pageSize?: number;
   search?: string;
-  project?: string;
   filterToday?: boolean;
   date?: string;
 }): Promise<{
@@ -230,10 +275,6 @@ export async function getPaginatedEntries(options?: {
 
   const conditions = [isNull(entries.deletedAt)];
 
-  if (options?.project && options.project !== "all") {
-    conditions.push(eq(entries.project, options.project));
-  }
-
   if (options?.filterToday) {
     conditions.push(eq(entries.date, todayIST()));
   }
@@ -247,7 +288,6 @@ export async function getPaginatedEntries(options?: {
     const term = `%${searchTrimmed}%`;
     const searchCondition = or(
       ilike(entries.summary, term),
-      ilike(entries.project, term),
       ilike(sql<string>`${entries.date}::text`, term),
       ilike(sql<string>`to_char(${entries.date}, 'DD Mon YYYY Month')`, term),
     );
@@ -284,7 +324,6 @@ export async function getPaginatedEntries(options?: {
 }
 
 export async function searchEntries(input: {
-  project?: Project;
   from?: string;
   to?: string;
   limit?: number;
@@ -294,7 +333,6 @@ export async function searchEntries(input: {
   const offset = input.offset ?? 0;
 
   const conditions = [isNull(entries.deletedAt)];
-  if (input.project) conditions.push(eq(entries.project, input.project));
   if (input.from) conditions.push(gte(entries.date, input.from));
   if (input.to) conditions.push(lte(entries.date, input.to));
 
@@ -331,8 +369,7 @@ export async function softDeleteEntry(
 export async function updateEntry(
   id: string,
   patch: {
-    project?: Project;
-    category?: Category[];
+    title?: string;
     summary?: string;
   },
 ): Promise<EntryRow> {
@@ -345,10 +382,7 @@ export async function updateEntry(
   const [row] = await db
     .update(entries)
     .set({
-      ...(patch.project !== undefined && { project: patch.project }),
-      ...(patch.category !== undefined && {
-        category: Array.from(new Set(patch.category)),
-      }),
+      ...(patch.title !== undefined && { title: patch.title.trim() }),
       ...(patch.summary !== undefined && { summary: patch.summary.trim() }),
       updatedAt: sql`now()`,
     })
@@ -370,7 +404,6 @@ export async function getBoardData(options?: {
   filterToday?: boolean;
   date?: string;
   search?: string;
-  project?: string;
 }): Promise<{
   sections: SectionWithEntries[];
   allSectionList: SectionRow[];
@@ -378,27 +411,17 @@ export async function getBoardData(options?: {
   const allSections = await getSections();
 
   const conditions = [isNull(entries.deletedAt)];
-  if (options?.filterToday) {
-    conditions.push(eq(entries.date, todayIST()));
-  }
-  if (options?.date && options.date.trim() !== "") {
-    conditions.push(eq(entries.date, options.date.trim()));
-  }
-  if (options?.project && options.project !== "all") {
-    conditions.push(eq(entries.project, options.project));
+  const targetDateFilter = options?.date?.trim() || (options?.filterToday ? todayIST() : undefined);
+  if (targetDateFilter) {
+    conditions.push(eq(entries.date, targetDateFilter));
   }
   if (options?.search && options.search.trim() !== "") {
     const term = `%${options.search.trim()}%`;
-    const searchCond = or(
-      ilike(entries.summary, term),
-      ilike(entries.project, term),
-      ilike(entries.sectionName, term),
-    );
+    const searchCond = ilike(entries.summary, term);
     if (searchCond) {
       conditions.push(searchCond);
     }
   }
-
 
   const allEntries = await db
     .select()
@@ -407,37 +430,53 @@ export async function getBoardData(options?: {
     .orderBy(asc(entries.createdAt));
 
   const sectionMap = new Map<string, EntryRow[]>();
-  allSections.forEach((s) => sectionMap.set(s.name, []));
+  allSections.forEach((s) => sectionMap.set(s.id, []));
 
   allEntries.forEach((entry) => {
-    const sName = entry.sectionName || "My Tasks";
-    if (!sectionMap.has(sName)) {
-      sectionMap.set(sName, []);
+    const sId = entry.sectionId;
+    if (sId && sectionMap.has(sId)) {
+      sectionMap.get(sId)!.push(entry);
+    } else if (allSections.length > 0) {
+      // Fallback to first section if unlinked
+      sectionMap.get(allSections[0].id)!.push(entry);
     }
-    sectionMap.get(sName)!.push(entry);
   });
 
-  const resultSections: SectionWithEntries[] = [];
+  let resultSections: SectionWithEntries[] = [];
 
   allSections.forEach((s) => {
     resultSections.push({
       ...s,
-      entries: sectionMap.get(s.name) || [],
+      entries: sectionMap.get(s.id) || [],
     });
-    sectionMap.delete(s.name);
   });
 
-  sectionMap.forEach((entryList, name) => {
-    resultSections.push({
-      id: name,
-      name,
-      date: null,
-      order: 999,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      entries: entryList,
+  // When viewing today or a specific date, filter sections so yesterday's sections are hidden
+  const isFilteredByDate = Boolean(options?.filterToday || options?.date);
+  const targetDate = options?.date?.trim() || (options?.filterToday ? todayIST() : undefined);
+
+  if (isFilteredByDate && targetDate) {
+    resultSections = resultSections.filter((sec) => {
+      // Keep section if it has entries for this date, or if it matches the target date or name
+      if (sec.entries.length > 0) return true;
+      if (sec.date === targetDate) return true;
+      if (sec.name === "My Tasks" || sec.name === "Today") return true;
+      if (sec.name === `Logs for ${targetDate}`) return true;
+      return false;
     });
-  });
+
+    // If no section exists for today yet, ensure a clean "My Tasks" section is returned
+    if (resultSections.length === 0) {
+      const defaultSecName = "My Tasks";
+      const createdSec = await createSection(defaultSecName, targetDate);
+      resultSections = [
+        {
+          ...createdSec,
+          entries: [],
+        },
+      ];
+    }
+  }
 
   return {
     sections: resultSections,

@@ -1,7 +1,6 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { z } from "zod";
 import { verifyApiKey } from "@/lib/auth";
-import { CATEGORIES, PROJECTS } from "@/lib/constants";
 import {
   createOrAppendEntry,
   createSection,
@@ -10,6 +9,8 @@ import {
   previewSummary,
   searchEntries,
   softDeleteEntry,
+  updateEntry,
+  updateSection,
 } from "@/lib/worklog";
 
 const handler = createMcpHandler(
@@ -17,18 +18,24 @@ const handler = createMcpHandler(
     server.registerTool(
       "get_sections",
       {
-        title: "Get worklog lists/sections",
-        description: "Returns all active list sections in DayLog (e.g. 'My Logs', 'Creonex project') so you can pick which list to add logs to.",
+        title: "Get worklog sections/lists",
+        description:
+          "Returns active list sections in DayLog including section IDs, names, and optional bound dates.",
         inputSchema: {},
       },
       async () => {
         const sectionsList = await getSections();
-        const names = sectionsList.map((s) => s.name);
+        const textList = sectionsList
+          .map(
+            (s) =>
+              `- [id: ${s.id}] '${s.name}'${s.date ? ` (date: ${s.date})` : ""}`,
+          )
+          .join("\n");
         return {
           content: [
             {
               type: "text",
-              text: `Available lists (${names.length}):\n- ${names.join("\n- ")}`,
+              text: `Available sections (${sectionsList.length}):\n${textList}`,
             },
           ],
         };
@@ -39,10 +46,17 @@ const handler = createMcpHandler(
       "create_section",
       {
         title: "Create a worklog section",
-        description: "Creates a new section (list column) in DayLog, such as 'Today', 'Tomorrow', 'Creonex project', or any custom date/list title.",
+        description:
+          "Creates a new section (list column) in DayLog (e.g. 'My Tasks', 'Sprint Notes', or date-bound section).",
         inputSchema: {
-          name: z.string().describe("Name of the section e.g. Today, Tomorrow, Project X"),
-          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Optional date YYYY-MM-DD for date-bound section"),
+          name: z
+            .string()
+            .describe("Name/title of the section e.g. My Tasks, Sprint Notes"),
+          date: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/)
+            .optional()
+            .describe("Optional date YYYY-MM-DD for date-bound section"),
         },
       },
       async ({ name, date }) => {
@@ -51,32 +65,59 @@ const handler = createMcpHandler(
           content: [
             {
               type: "text",
-              text: `Section '${sec.name}' created successfully.`,
+              text: `Section '${sec.name}' [id: ${sec.id}] created successfully.`,
             },
           ],
         };
       },
     );
 
+    server.registerTool(
+      "update_section",
+      {
+        title: "Update section title",
+        description: "Renames/updates a section title using section id or section name.",
+        inputSchema: {
+          id: z.string().describe("Section id or current section name"),
+          name: z.string().describe("New title for the section"),
+        },
+      },
+      async ({ id, name }) => {
+        const sec = await updateSection(id, name);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Section updated to '${sec.name}' [id: ${sec.id}].`,
+            },
+          ],
+        };
+      },
+    );
 
     server.registerTool(
       "create_or_append_entry",
       {
         title: "Log work entry",
         description:
-          "Create a worklog entry for a project/section on a given date (defaults to today, IST). " +
-          "If section is omitted, today's logs automatically route to the 'Today' list section. " +
-          "Logs for past or future dates (e.g. 2 or 3 days ago YYYY-MM-DD) automatically route into that date's section column.",
+          "Create a worklog entry on a given date (defaults to today in IST). " +
+          "If section is omitted, automatically creates/uses the default section for today ('My Tasks'). " +
+          "Can also log directly into a specific section by sectionId or section name.",
         inputSchema: {
-          project: z.enum(PROJECTS).optional(),
-          category: z.array(z.enum(CATEGORIES)).optional(),
-          title: z.string().optional().describe("Title of the task/log entry"),
+          title: z.string().optional().describe("Title of the log entry"),
           summary: z
             .string()
             .describe(
-              "Specific description of the work done. Generic filler like 'worked on stuff' is rejected.",
+              "Specific description/details of work done. Generic filler like 'worked on stuff' is rejected.",
             ),
-          section: z.string().optional().describe("Section/list name where task should be added (defaults to 'Today' or date e.g. YYYY-MM-DD)"),
+          sectionId: z
+            .string()
+            .optional()
+            .describe("Optional section ID to log into"),
+          section: z
+            .string()
+            .optional()
+            .describe("Optional section name where task should be added (defaults to 'My Tasks')"),
           date: z
             .string()
             .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -84,13 +125,11 @@ const handler = createMcpHandler(
             .describe("YYYY-MM-DD, defaults to today in IST"),
         },
       },
-
-      async ({ project, category, title, summary, section, date }) => {
+      async ({ title, summary, sectionId, section, date }) => {
         const row = await createOrAppendEntry({
-          project,
-          category,
           title,
           summary,
+          sectionId,
           sectionName: section,
           date,
         });
@@ -98,20 +137,46 @@ const handler = createMcpHandler(
           content: [
             {
               type: "text",
-              text: `Logged for ${row.project} in section '${row.sectionName}' on ${row.date}.`,
+              text: `Logged [id: ${row.id}] in section [sectionId: ${row.sectionId}] on ${row.date}.`,
             },
           ],
         };
       },
     );
 
+    server.registerTool(
+      "update_entry",
+      {
+        title: "Update worklog entry",
+        description: "Updates details or title of an existing log entry by entry id.",
+        inputSchema: {
+          id: z.string().describe("Entry UUID"),
+          title: z.string().optional().describe("Updated log title"),
+          summary: z.string().optional().describe("Updated log summary/details"),
+        },
+      },
+      async ({ id, title, summary }) => {
+        const updated = await updateEntry(id, {
+          title,
+          summary,
+        });
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Updated entry [id: ${updated.id}] on ${updated.date}.`,
+            },
+          ],
+        };
+      },
+    );
 
     server.registerTool(
       "get_today",
       {
         title: "Get today's worklog",
         description:
-          "Returns all worklog entries for today (IST), across all projects, as a short spoken-style summary.",
+          "Returns all worklog entries for today (IST).",
         inputSchema: {},
       },
       async () => {
@@ -128,7 +193,7 @@ const handler = createMcpHandler(
         const text = rows
           .map(
             (row) =>
-              `[id: ${row.id}] ${row.project} (${row.category.join(", ")}):\n${row.summary}`,
+              `[id: ${row.id}] ${row.title ? `${row.title} - ` : ""}${row.summary}`,
           )
           .join("\n\n");
 
@@ -136,7 +201,7 @@ const handler = createMcpHandler(
           content: [
             {
               type: "text",
-              text: `Today (${date}) — ${rows.length} project(s) logged:\n\n${text}`,
+              text: `Today (${date}) — ${rows.length} entry/entries logged:\n\n${text}`,
             },
           ],
         };
@@ -148,9 +213,8 @@ const handler = createMcpHandler(
       {
         title: "Search worklog entries",
         description:
-          "Search worklog entries by project and/or date range. Always paginated — never returns unbounded results.",
+          "Search worklog entries by date range. Always paginated.",
         inputSchema: {
-          project: z.enum(PROJECTS).optional(),
           from: z
             .string()
             .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -163,9 +227,8 @@ const handler = createMcpHandler(
           offset: z.number().int().min(0).default(0),
         },
       },
-      async ({ project, from, to, limit, offset }) => {
+      async ({ from, to, limit, offset }) => {
         const { rows } = await searchEntries({
-          project,
           from,
           to,
           limit,
@@ -179,7 +242,7 @@ const handler = createMcpHandler(
         const text = rows
           .map(
             (row) =>
-              `[id: ${row.id}] ${row.date} — ${row.project} (${row.category.join(", ")})\n${previewSummary(row.summary)}`,
+              `[id: ${row.id}] ${row.date} — ${row.title ? `${row.title} - ` : ""}${previewSummary(row.summary)}`,
           )
           .join("\n\n");
 
@@ -200,7 +263,7 @@ const handler = createMcpHandler(
         title: "Delete worklog entry",
         description: "Soft-deletes a worklog entry by id.",
         inputSchema: {
-          id: z.uuid(),
+          id: z.string().describe("Entry UUID to delete"),
         },
       },
       async ({ id }) => {
@@ -218,7 +281,7 @@ const handler = createMcpHandler(
           content: [
             {
               type: "text",
-              text: `Deleted entry for ${row.project} on ${row.date}.`,
+              text: `Deleted entry [id: ${row.id}] on ${row.date}.`,
             },
           ],
         };

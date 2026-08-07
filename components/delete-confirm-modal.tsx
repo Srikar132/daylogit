@@ -75,7 +75,7 @@ export function DeleteConfirmModal({
         <div className="my-5 rounded-2xl border border-white/8 bg-white/5 p-4 space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-[#8ab4f8]">
-              {entry.project}
+              {entry.title || "Log Entry"}
             </span>
             <span className="text-[11px] font-medium text-[#5f6368]">
               {entry.date}

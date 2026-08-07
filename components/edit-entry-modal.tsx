@@ -2,81 +2,52 @@
 
 import { X, Sparkles, AlertCircle } from "lucide-react";
 import { useEffect, useState, useTransition } from "react";
-import { CategoryTag } from "@/components/category-tag";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { createEntryAction, updateEntryAction } from "@/lib/actions";
-import {
-  CATEGORIES,
-  PROJECTS,
-  type Category,
-  type Project,
-} from "@/lib/constants";
 import type { EntryRow } from "@/lib/worklog";
 
 interface EditEntryModalProps {
   isOpen: boolean;
   onClose: () => void;
   entry?: EntryRow | null;
-  defaultProject?: Project;
 }
 
 export function EditEntryModal({
   isOpen,
   onClose,
   entry,
-  defaultProject,
 }: EditEntryModalProps) {
   const isEditing = Boolean(entry);
-  const [selectedProject, setSelectedProject] = useState<Project>(
-    (entry?.project as Project) ?? defaultProject ?? PROJECTS[0],
-  );
-  const [selectedCategories, setSelectedCategories] = useState<Category[]>(
-    (entry?.category as Category[]) ?? [CATEGORIES[0]],
-  );
+  const [title, setTitle] = useState(entry?.title ?? "");
   const [summary, setSummary] = useState(entry?.summary ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     if (isOpen) {
-      setSelectedProject(
-        (entry?.project as Project) ?? defaultProject ?? PROJECTS[0],
-      );
-      setSelectedCategories(
-        (entry?.category as Category[]) ?? [CATEGORIES[0]],
-      );
+      setTitle(entry?.title ?? "");
       setSummary(entry?.summary ?? "");
       setError(null);
     }
-  }, [isOpen, entry, defaultProject]);
+  }, [isOpen, entry]);
 
   if (!isOpen) return null;
-
-  function toggleCategory(cat: Category) {
-    setSelectedCategories((prev) => {
-      if (prev.includes(cat)) {
-        if (prev.length === 1) return prev; // Keep at least one
-        return prev.filter((c) => c !== cat);
-      }
-      return [...prev, cat];
-    });
-  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
 
-    if (!summary.trim() || summary.trim().length < 10) {
-      setError("Please provide a detailed summary (at least 10 characters).");
+    if (!summary.trim() || summary.trim().length < 5) {
+      setError("Please provide a summary (at least 5 characters).");
       return;
     }
 
     const formData = new FormData();
     if (isEditing && entry?.id) formData.append("id", entry.id);
-    formData.append("project", selectedProject);
-    selectedCategories.forEach((cat) => formData.append("category", cat));
-    formData.append("summary", summary);
+    if (title.trim()) formData.append("title", title.trim());
+    formData.append("summary", summary.trim());
 
     startTransition(async () => {
       const res = isEditing
@@ -99,8 +70,8 @@ export function EditEntryModal({
         onClick={onClose}
       />
 
-      {/* Modal Container — Spacious & Modern */}
-      <div className="relative w-full max-w-2xl overflow-hidden rounded-3xl border border-white/10 bg-[#1e1e1e] p-6 sm:p-8 shadow-2xl transition-all animate-in zoom-in-95">
+      {/* Modal Container */}
+      <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-white/10 bg-[#1e1e1e] p-6 sm:p-8 shadow-2xl transition-all animate-in zoom-in-95">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-white/8 pb-5">
           <div className="flex items-center gap-3 pr-4">
@@ -109,12 +80,12 @@ export function EditEntryModal({
             </div>
             <div>
               <h2 className="text-[18px] font-bold text-[#e8eaed]">
-                {isEditing ? "Edit Work Log" : "Create New Work Log"}
+                {isEditing ? "Edit Work Log" : "Create Work Log"}
               </h2>
               <p className="text-[12.5px] text-[#9aa0a6]">
                 {isEditing
-                  ? "Refine your activity summary and metadata"
-                  : "Record your latest accomplishment cleanly"}
+                  ? "Refine your log title and details"
+                  : "Record your latest log entry"}
               </p>
             </div>
           </div>
@@ -128,8 +99,8 @@ export function EditEntryModal({
           </button>
         </div>
 
-        {/* Form Body with Generous Spacing */}
-        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-6">
+        {/* Form Body */}
+        <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-5">
           {/* Error Banner */}
           {error && (
             <div className="flex items-center gap-2.5 rounded-2xl border border-[#f28b82]/20 bg-[#f28b82]/10 p-4 text-[13px] text-[#f28b82]">
@@ -138,66 +109,32 @@ export function EditEntryModal({
             </div>
           )}
 
-          {/* Project Selection */}
-          <div className="space-y-2">
+          {/* Title Input */}
+          <div className="space-y-1.5">
             <label className="block text-[12px] font-semibold uppercase tracking-wider text-[#9aa0a6]">
-              Target Project
+              Title (Optional)
             </label>
-            <div className="flex flex-wrap gap-2.5">
-              {PROJECTS.map((proj) => {
-                const active = selectedProject === proj;
-                return (
-                  <button
-                    key={proj}
-                    type="button"
-                    onClick={() => setSelectedProject(proj)}
-                    className={`rounded-full px-4 py-2 text-[13px] font-medium transition-all ${
-                      active
-                        ? "bg-[#8ab4f8] text-[#141414] shadow-md font-semibold scale-[1.02]"
-                        : "border border-white/10 bg-white/5 text-[#c4c7c5] hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    {proj}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Category Selector */}
-          <div className="space-y-2">
-            <label className="block text-[12px] font-semibold uppercase tracking-wider text-[#9aa0a6]">
-              Categories (Pick one or more)
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {CATEGORIES.map((cat) => {
-                const active = selectedCategories.includes(cat);
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => toggleCategory(cat)}
-                    className="transition-transform active:scale-95"
-                  >
-                    <CategoryTag category={cat} selected={active} />
-                  </button>
-                );
-              })}
-            </div>
+            <Input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Completed API integration"
+              className="rounded-2xl border-white/10 bg-white/5 px-4 py-2.5 text-[13.5px] text-[#e8eaed] placeholder:text-[#5f6368] focus-visible:ring-[#8ab4f8]"
+            />
           </div>
 
           {/* Summary Textarea */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <label className="block text-[12px] font-semibold uppercase tracking-wider text-[#9aa0a6]">
-              Activity Summary & Details
+              Details / Summary
             </label>
             <Textarea
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
-              placeholder="Provide a detailed overview of what you built, fixed, analyzed, or designed today..."
-              rows={5}
+              placeholder="Summary of work done today..."
+              rows={4}
               required
-              minLength={10}
+              minLength={5}
               className="resize-none rounded-2xl border-white/10 bg-white/5 p-4 text-[13.5px] leading-relaxed text-[#e8eaed] placeholder:text-[#5f6368] focus-visible:ring-[#8ab4f8] focus-visible:ring-1"
             />
           </div>

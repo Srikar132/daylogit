@@ -40,10 +40,10 @@ function SortableSectionItem({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({
-      id: `section-${section.id || section.name}`,
+      id: `section-${section.id}`,
       data: {
         type: "section",
-        sectionName: section.name,
+        sectionId: section.id,
       },
     });
 
@@ -93,8 +93,8 @@ export function WorklogBoard({
     const type = active.data.current?.type;
 
     if (type === "section") {
-      const secName = active.data.current?.sectionName;
-      const foundSec = sectionsList.find((s) => s.name === secName);
+      const secId = active.data.current?.sectionId;
+      const foundSec = sectionsList.find((s) => s.id === secId);
       if (foundSec) setActiveSection(foundSec);
     } else if (type === "log") {
       const logId = active.data.current?.logId;
@@ -121,8 +121,8 @@ export function WorklogBoard({
       const activeSecId = String(active.id).replace(/^section-/, "");
       const overSecId = String(over.id).replace(/^section-/, "");
 
-      const oldIndex = sectionsList.findIndex((s) => (s.id || s.name) === activeSecId);
-      const newIndex = sectionsList.findIndex((s) => (s.id || s.name) === overSecId);
+      const oldIndex = sectionsList.findIndex((s) => s.id === activeSecId);
+      const newIndex = sectionsList.findIndex((s) => s.id === overSecId);
 
       if (oldIndex !== -1 && newIndex !== -1) {
         const newArr = arrayMove(sectionsList, oldIndex, newIndex);
@@ -148,24 +148,22 @@ export function WorklogBoard({
     // 2. Log Entry Drag & Drop between Section Columns
     if (activeType === "log") {
       const logId = active.data.current?.logId;
-      const sourceSectionName = active.data.current?.sectionName;
+      const sourceSectionId = active.data.current?.sectionId;
 
-      let targetSectionName: string | undefined = over.data.current?.sectionName;
-      if (!targetSectionName && String(over.id).startsWith("section-")) {
-        const secId = String(over.id).replace(/^section-/, "");
-        const targetSec = sectionsList.find((s) => (s.id || s.name) === secId);
-        targetSectionName = targetSec?.name;
+      let targetSectionId: string | undefined = over.data.current?.sectionId;
+      if (!targetSectionId && String(over.id).startsWith("section-")) {
+        targetSectionId = String(over.id).replace(/^section-/, "");
       }
 
-      if (logId && targetSectionName && targetSectionName !== sourceSectionName) {
+      if (logId && targetSectionId && targetSectionId !== sourceSectionId) {
         // Optimistic State Update
         setSectionsList((prevSections) => {
           let draggedLog: EntryRow | null = null;
           const next = prevSections.map((sec) => {
-            if (sec.name === sourceSectionName) {
+            if (sec.id === sourceSectionId) {
               const remaining = sec.entries.filter((e) => {
                 if (e.id === logId) {
-                  draggedLog = { ...e, sectionName: targetSectionName };
+                  draggedLog = { ...e, sectionId: targetSectionId! };
                   return false;
                 }
                 return true;
@@ -177,7 +175,7 @@ export function WorklogBoard({
 
           if (draggedLog) {
             return next.map((sec) => {
-              if (sec.name === targetSectionName) {
+              if (sec.id === targetSectionId) {
                 return { ...sec, entries: [...sec.entries, draggedLog!] };
               }
               return sec;
@@ -192,7 +190,7 @@ export function WorklogBoard({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               entryId: logId,
-              targetSection: targetSectionName,
+              targetSection: targetSectionId,
             }),
           });
           if (onRefresh) onRefresh();

@@ -22,19 +22,15 @@ export const sections = pgTable("sections", {
 export const entries = pgTable("entries", {
   id: uuid("id").defaultRandom().primaryKey(),
   date: date("date").notNull(),
-  project: text("project").notNull(),
-  category: text("category").array().notNull(),
   title: text("title"),
   summary: text("summary").notNull(),
-  sectionName: text("section_name").notNull().default("My Tasks"),
-  completed: boolean("completed").notNull().default(false),
-  completedAt: timestamp("completed_at"),
+  sectionId: uuid("section_id").references(() => sections.id, { onDelete: "cascade" }),
   deletedAt: timestamp("deleted_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-const sql = neon(process.env.DATABASE_URL!);
+const sql = neon(process.env.DATABASE_URL || "postgres://placeholder:placeholder@localhost/placeholder");
 
 export const db = drizzle(sql, { schema: { entries, sections } });
 

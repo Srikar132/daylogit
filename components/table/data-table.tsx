@@ -66,23 +66,13 @@ export function WorklogDataTable({
                     {/* Summary / Task Preview */}
                     <td className="px-4 py-3.5 align-top">
                       <span className="text-[13px] font-medium leading-snug text-[#e8eaed]">
-                        {entry.project} — {entry.summary.length > 50 ? `${entry.summary.slice(0, 50)}…` : entry.summary}
+                        {entry.title ? `${entry.title} — ` : ""}{entry.summary.length > 50 ? `${entry.summary.slice(0, 50)}…` : entry.summary}
                       </span>
-                    </td>
-
-                    {/* Category Badges */}
-                    <td className="px-4 py-3.5 align-top">
-                      <RenderCategories categories={entry.category} />
                     </td>
 
                     {/* Date & Updated Time */}
                     <td className="px-4 py-3.5 align-top">
                       <RenderDate date={entry.date} updatedAt={entry.updatedAt} />
-                    </td>
-
-                    {/* Project Tag */}
-                    <td className="px-4 py-3.5 align-top">
-                      <RenderProject project={entry.project} />
                     </td>
 
                     {/* Full Summary Hover */}
