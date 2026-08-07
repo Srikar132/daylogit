@@ -4,6 +4,8 @@ import { verifyApiKey } from "@/lib/auth";
 import { CATEGORIES, PROJECTS } from "@/lib/constants";
 import {
   createOrAppendEntry,
+  createSection,
+  getSections,
   getTodayEntries,
   previewSummary,
   searchEntries,
@@ -13,22 +15,68 @@ import {
 const handler = createMcpHandler(
   (server) => {
     server.registerTool(
+      "get_sections",
+      {
+        title: "Get worklog lists/sections",
+        description: "Returns all active list sections in DayLog (e.g. 'My Logs', 'Creonex project') so you can pick which list to add logs to.",
+        inputSchema: {},
+      },
+      async () => {
+        const sectionsList = await getSections();
+        const names = sectionsList.map((s) => s.name);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Available lists (${names.length}):\n- ${names.join("\n- ")}`,
+            },
+          ],
+        };
+      },
+    );
+
+    server.registerTool(
+      "create_section",
+      {
+        title: "Create a worklog section",
+        description: "Creates a new section (list column) in DayLog, such as 'Today', 'Tomorrow', 'Creonex project', or any custom date/list title.",
+        inputSchema: {
+          name: z.string().describe("Name of the section e.g. Today, Tomorrow, Project X"),
+          date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("Optional date YYYY-MM-DD for date-bound section"),
+        },
+      },
+      async ({ name, date }) => {
+        const sec = await createSection(name, date);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Section '${sec.name}' created successfully.`,
+            },
+          ],
+        };
+      },
+    );
+
+
+    server.registerTool(
       "create_or_append_entry",
       {
         title: "Log work entry",
         description:
-          "Create or append a worklog entry for a project on a given date (defaults to today, IST). " +
-          "If an entry already exists for that date+project, the summary is appended as a new bullet " +
-          "and categories are merged — past bullets are never overwritten. " +
-          "If a session runs past midnight IST, log against the date the session started, not when this tool is called.",
+          "Create a worklog entry for a project/section on a given date (defaults to today, IST). " +
+          "If section is omitted, today's logs automatically route to the 'Today' list section. " +
+          "Logs for past or future dates (e.g. 2 or 3 days ago YYYY-MM-DD) automatically route into that date's section column.",
         inputSchema: {
-          project: z.enum(PROJECTS),
-          category: z.array(z.enum(CATEGORIES)).min(1),
+          project: z.enum(PROJECTS).optional(),
+          category: z.array(z.enum(CATEGORIES)).optional(),
+          title: z.string().optional().describe("Title of the task/log entry"),
           summary: z
             .string()
             .describe(
               "Specific description of the work done. Generic filler like 'worked on stuff' is rejected.",
             ),
+          section: z.string().optional().describe("Section/list name where task should be added (defaults to 'Today' or date e.g. YYYY-MM-DD)"),
           date: z
             .string()
             .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -36,23 +84,27 @@ const handler = createMcpHandler(
             .describe("YYYY-MM-DD, defaults to today in IST"),
         },
       },
-      async ({ project, category, summary, date }) => {
+
+      async ({ project, category, title, summary, section, date }) => {
         const row = await createOrAppendEntry({
           project,
           category,
+          title,
           summary,
+          sectionName: section,
           date,
         });
         return {
           content: [
             {
               type: "text",
-              text: `Logged for ${row.project} on ${row.date}. Entry now has ${row.summary.split("\n").length} bullet(s).`,
+              text: `Logged for ${row.project} in section '${row.sectionName}' on ${row.date}.`,
             },
           ],
         };
       },
     );
+
 
     server.registerTool(
       "get_today",

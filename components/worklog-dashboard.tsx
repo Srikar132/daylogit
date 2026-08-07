@@ -1,93 +1,92 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { EditEntryModal } from "@/components/edit-entry-modal";
-import { WorklogDataTable } from "@/components/table/data-table";
+import { WorklogBoard } from "@/components/worklog-board";
 import { WorklogHeader } from "@/components/worklog-header";
 import { WorklogSidebar } from "@/components/worklog-sidebar";
-import type { EntryRow } from "@/lib/worklog";
+import type { SectionRow, SectionWithEntries } from "@/lib/worklog";
 
 interface WorklogDashboardProps {
-  entries: EntryRow[];
-  totalCount: number;
-  totalPages: number;
-  page: number;
-  pageSize: number;
-  currentProject?: string;
+  sections: SectionWithEntries[];
+  allSectionList: SectionRow[];
   isToday?: boolean;
   currentDate?: string;
 }
 
 export function WorklogDashboard({
-  entries,
-  totalCount,
-  totalPages,
-  page,
-  pageSize,
-  currentProject,
+  sections,
+  allSectionList,
   isToday,
   currentDate,
 }: WorklogDashboardProps) {
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const router = useRouter();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  // Default all section names selected
+  const [selectedSectionNames, setSelectedSectionNames] = useState<string[]>(
+    allSectionList.map((s) => s.name),
+  );
+
+  function handleToggleSectionName(name: string) {
+    setSelectedSectionNames((prev) =>
+      prev.includes(name)
+        ? prev.filter((n) => n !== name)
+        : [...prev, name],
+    );
+  }
+
+  function handleRefresh() {
+    router.refresh();
+  }
+
   return (
-    <div className="flex min-h-screen flex-col bg-[#141414] text-[#e8eaed]">
-      {/* Top Bar Header */}
+    <div className="flex h-screen w-screen flex-col bg-[#1e1f20] text-[#e8eaed] overflow-hidden font-sans">
+      {/* Top Google Tasks Header Bar */}
       <WorklogHeader
         onToggleMobileSidebar={() => setIsMobileSidebarOpen(true)}
       />
 
-      {/* Main Body with Sidebar + Content */}
-      <div className="flex flex-1 overflow-hidden">
+      {/* Main Body: Left Sidebar + Right Horizontal Board Container */}
+      <div className="flex flex-1 overflow-hidden relative">
         {/* Left Navigation Sidebar */}
         <WorklogSidebar
-          onOpenCreate={() => setIsCreateOpen(true)}
+          allSections={allSectionList}
+          selectedSectionNames={selectedSectionNames}
+          onToggleSectionName={handleToggleSectionName}
+          onRefreshSections={handleRefresh}
           isMobileOpen={isMobileSidebarOpen}
           onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto max-w-6xl space-y-4">
-            {/* Title / Summary Banner (No underline border) */}
-            <div className="flex items-center justify-between">
+        {/* Horizontal Scrolling Board Main Content Area */}
+        <main className="flex-1 overflow-hidden bg-[#1e1f20] flex flex-col">
+          {(isToday || currentDate) && (
+            <div className="px-6 pt-4 pb-0 flex items-center justify-between">
               <div>
-                <h1 className="text-[20px] font-bold tracking-tight text-[#e8eaed]">
-                  {currentDate
-                    ? `Logs for ${currentDate}`
-                    : isToday
-                    ? "Today's Work Log"
-                    : currentProject && currentProject !== "all"
-                    ? `${currentProject} Logs`
-                    : "All Work Logs"}
+                <h1 className="text-[20px] font-medium text-[#e8eaed]">
+                  {isToday ? "Today's Logs" : `Logs for ${currentDate}`}
                 </h1>
                 <p className="text-[12px] text-[#9aa0a6]">
-                  {totalCount > 0
-                    ? `Showing ${totalCount} recorded task log${totalCount === 1 ? "" : "s"}`
-                    : "No logs found"}
+                  Viewing work logs filtered by date
                 </p>
               </div>
             </div>
+          )}
 
-            {/* Paginated Server-Side Data Table */}
-            <WorklogDataTable
-              entries={entries}
-              totalCount={totalCount}
-              totalPages={totalPages}
-              page={page}
-              pageSize={pageSize}
-              onOpenCreate={() => setIsCreateOpen(true)}
+          <div className="flex-1 overflow-hidden">
+            <WorklogBoard
+              initialSections={sections}
+              visibleSectionNames={
+                isToday || currentDate
+                  ? undefined // show all relevant sections for date
+                  : selectedSectionNames
+              }
+              onRefresh={handleRefresh}
             />
           </div>
         </main>
       </div>
-
-      {/* Create Modal */}
-      <EditEntryModal
-        isOpen={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-      />
     </div>
   );
 }

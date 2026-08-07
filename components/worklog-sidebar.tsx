@@ -1,25 +1,32 @@
 "use client";
 
 import {
-  Calendar,
   CheckSquare,
   ChevronDown,
-  Layers,
   Plus,
+  SquareCheck,
+  Square,
+  Star,
   X,
 } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import { PROJECTS, type Project } from "@/lib/constants";
+import type { SectionRow } from "@/lib/worklog";
 
 interface WorklogSidebarProps {
-  onOpenCreate: () => void;
+  allSections: SectionRow[];
+  selectedSectionNames: string[];
+  onToggleSectionName: (name: string) => void;
+  onRefreshSections?: () => void;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
 }
 
 export function WorklogSidebar({
-  onOpenCreate,
+  allSections,
+  selectedSectionNames,
+  onToggleSectionName,
+  onRefreshSections,
   isMobileOpen = false,
   onCloseMobile,
 }: WorklogSidebarProps) {
@@ -27,98 +34,94 @@ export function WorklogSidebar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const currentProject = searchParams.get("project") ?? "all";
   const isTodayFilter = searchParams.get("today") === "true";
+  const dateFilter = searchParams.get("date");
+  const isAllActive = !isTodayFilter && !dateFilter;
+
   const [listsOpen, setListsOpen] = useState(true);
+  const [isCreatingList, setIsCreatingList] = useState(false);
+  const [newListName, setNewListName] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function filterByProject(proj: string) {
+  function handleShowAllLogs() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("today");
-    if (proj === "all") {
-      params.delete("project");
-    } else {
-      params.set("project", proj);
+    params.delete("date");
+    params.delete("q");
+    params.set("page", "1");
+    router.push(`/?${params.toString()}`);
+    if (onCloseMobile) onCloseMobile();
+  }
+
+  async function handleCreateSection(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newListName.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/sections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newListName.trim() }),
+      });
+      if (res.ok) {
+        setNewListName("");
+        setIsCreatingList(false);
+        if (onRefreshSections) onRefreshSections();
+      }
+    } catch (err) {
+      console.error("Failed to create section", err);
+    } finally {
+      setIsSubmitting(false);
     }
-    params.set("page", "1");
-    router.push(`${pathname}?${params.toString()}`);
-    if (onCloseMobile) onCloseMobile();
-  }
-
-  function filterToday() {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("project");
-    params.set("today", "true");
-    params.set("page", "1");
-    router.push(`${pathname}?${params.toString()}`);
-    if (onCloseMobile) onCloseMobile();
-  }
-
-  function showAllLogs() {
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete("project");
-    params.delete("today");
-    params.set("page", "1");
-    router.push(`${pathname}?${params.toString()}`);
-    if (onCloseMobile) onCloseMobile();
   }
 
   const sidebarContent = (
-    <div className="flex h-full w-64 flex-col gap-6 p-4">
-      {/* Create Pill Button (Google Tasks style) */}
+    <div className="flex h-full w-64 flex-col gap-5 p-4 bg-[#1e1f20] text-[#e8eaed] select-none">
+      {/* Create Pill Button (Exact Google Tasks style) */}
       <button
         type="button"
-        onClick={() => {
-          onOpenCreate();
-          if (onCloseMobile) onCloseMobile();
-        }}
-        className="flex items-center gap-3 rounded-full border border-white/10 bg-[#1e1e1e] px-5 py-3.5 text-[14px] font-medium text-[#8ab4f8] shadow-lg transition-all hover:bg-white/10 hover:shadow-xl active:scale-95"
+        onClick={() => setIsCreatingList(true)}
+        className="flex cursor-pointer items-center gap-3.5 rounded-2xl border border-white/10 bg-[#131314] px-5 py-3.5 text-[14px] font-semibold text-[#8ab4f8] shadow-md transition-all hover:bg-[#28292c] active:scale-95"
       >
         <Plus className="h-5 w-5 stroke-[2.5]" />
         <span>Create</span>
       </button>
 
-      {/* Main Navigation List */}
+      {/* Primary Navigation Links */}
       <div className="flex flex-col gap-1">
         {/* All logs */}
         <button
           type="button"
-          onClick={showAllLogs}
-          className={`flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-[13.5px] font-medium transition-all ${
-            currentProject === "all" && !isTodayFilter
+          onClick={handleShowAllLogs}
+          className={`flex w-full cursor-pointer items-center gap-3.5 rounded-full px-4 py-2.5 text-[13.5px] font-medium transition-all ${
+            isAllActive
               ? "bg-[#004a77] text-[#c2e7ff] font-semibold"
-              : "text-[#c4c7c5] hover:bg-white/5"
+              : "text-[#c4c7c5] hover:bg-white/5 hover:text-white"
           }`}
         >
-          <CheckSquare className="h-4 w-4" />
+          <CheckSquare className="h-4 w-4 text-[#8ab4f8]" />
           <span>All logs</span>
         </button>
 
-        {/* Today */}
+        {/* Starred */}
         <button
           type="button"
-          onClick={filterToday}
-          className={`flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-[13.5px] font-medium transition-all ${
-            isTodayFilter
-              ? "bg-[#004a77] text-[#c2e7ff] font-semibold"
-              : "text-[#c4c7c5] hover:bg-white/5"
-          }`}
+          className="flex w-full cursor-pointer items-center gap-3.5 rounded-full px-4 py-2.5 text-[13.5px] font-medium text-[#c4c7c5] hover:bg-white/5 hover:text-white transition-all"
         >
-          <Calendar className="h-4 w-4" />
-          <span>Today</span>
+          <Star className="h-4 w-4 text-[#9aa0a6]" />
+          <span>Starred</span>
         </button>
       </div>
 
-      {/* Projects List Header */}
-      <div className="flex flex-col gap-1 border-t border-white/8 pt-4">
+      {/* Lists Accordion Section (Matching Google Tasks lists format) */}
+      <div className="flex flex-col gap-1 border-t border-white/10 pt-4">
         <button
           type="button"
           onClick={() => setListsOpen((prev) => !prev)}
-          className="flex items-center justify-between px-4 py-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-[#9aa0a6] hover:text-[#e8eaed]"
+          className="flex cursor-pointer items-center justify-between px-3 py-1 text-[12px] font-semibold tracking-wide text-[#9aa0a6] hover:text-white"
         >
-          <span className="flex items-center gap-2">
-            <Layers className="h-3.5 w-3.5" />
-            Projects
-          </span>
+          <span>Lists</span>
           <ChevronDown
             className={`h-4 w-4 transition-transform ${
               listsOpen ? "" : "-rotate-90"
@@ -126,27 +129,68 @@ export function WorklogSidebar({
           />
         </button>
 
-        {/* Project Links */}
         {listsOpen && (
-          <div className="mt-1 flex flex-col gap-0.5 pl-2">
-            {PROJECTS.map((proj) => {
-              const active = currentProject === proj && !isTodayFilter;
+          <div className="mt-1 flex flex-col gap-0.5 pl-1">
+            {allSections.map((sec) => {
+              const isChecked = selectedSectionNames.includes(sec.name);
               return (
                 <button
-                  key={proj}
+                  key={sec.id || sec.name}
                   type="button"
-                  onClick={() => filterByProject(proj)}
-                  className={`flex w-full items-center gap-3 rounded-full px-3 py-2 text-[13px] transition-all ${
-                    active
-                      ? "bg-[#8ab4f8]/15 text-[#8ab4f8] font-semibold"
-                      : "text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed]"
-                  }`}
+                  onClick={() => onToggleSectionName(sec.name)}
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-full px-3 py-2 text-[13.5px] text-[#c4c7c5] hover:bg-white/5 hover:text-white transition-colors"
                 >
-                  <span className="h-2 w-2 rounded-full bg-[#8ab4f8]" />
-                  <span>{proj}</span>
+                  {isChecked ? (
+                    <SquareCheck className="h-4 w-4 text-[#8ab4f8] fill-[#8ab4f8]/20 shrink-0" />
+                  ) : (
+                    <Square className="h-4 w-4 text-[#9aa0a6] shrink-0" />
+                  )}
+                  <span className="truncate">{sec.name}</span>
                 </button>
               );
             })}
+
+            {/* Create new list action */}
+            {!isCreatingList ? (
+              <button
+                type="button"
+                onClick={() => setIsCreatingList(true)}
+                className="mt-1.5 flex w-full cursor-pointer items-center gap-3 rounded-full px-3 py-2 text-[13px] text-[#8ab4f8] hover:bg-white/5 transition-colors"
+              >
+                <Plus className="h-4 w-4 stroke-[2.5]" />
+                <span>Create new list</span>
+              </button>
+            ) : (
+              <form onSubmit={handleCreateSection} className="mt-2 flex flex-col gap-2 p-3 rounded-2xl bg-[#131314] border border-white/10 shadow-lg">
+                <input
+                  type="text"
+                  value={newListName}
+                  onChange={(e) => setNewListName(e.target.value)}
+                  placeholder="Enter list title"
+                  autoFocus
+                  className="w-full bg-transparent px-1 py-1 text-[13px] text-[#e8eaed] placeholder:text-[#9aa0a6] focus:outline-none"
+                />
+                <div className="flex justify-end gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCreatingList(false);
+                      setNewListName("");
+                    }}
+                    className="rounded-full px-3 py-1 text-[11.5px] text-[#9aa0a6] hover:text-white cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !newListName.trim()}
+                    className="rounded-full bg-[#8ab4f8] px-3.5 py-1 text-[11.5px] font-semibold text-[#141414] disabled:opacity-50 cursor-pointer"
+                  >
+                    Done
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         )}
       </div>
@@ -156,28 +200,29 @@ export function WorklogSidebar({
   return (
     <>
       {/* Desktop Persistent Sidebar */}
-      <aside className="hidden w-64 shrink-0 border-r border-white/8 bg-[#141414] md:block">
+      <aside className="hidden w-64 shrink-0 border-r border-[#2e2f33] bg-[#1e1f20] md:block">
         {sidebarContent}
       </aside>
 
-      {/* Mobile Drawer */}
+      {/* Mobile Drawer Overlay */}
       {isMobileOpen && (
         <div className="fixed inset-0 z-50 flex md:hidden">
+          {/* Backdrop */}
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
             onClick={onCloseMobile}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer transition-opacity"
           />
-          <div className="relative flex w-64 max-w-[80vw] flex-col bg-[#141414] shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-white/8">
-              <span className="text-[15px] font-bold text-[#e8eaed]">Menu</span>
-              <button
-                type="button"
-                onClick={onCloseMobile}
-                className="rounded-full p-1 text-[#9aa0a6] hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
+
+          {/* Drawer content */}
+          <div className="relative flex w-64 flex-col bg-[#1e1f20] shadow-2xl z-10">
+            <button
+              type="button"
+              onClick={onCloseMobile}
+              aria-label="Close Navigation"
+              className="absolute right-3 top-3 rounded-full p-2 text-[#9aa0a6] hover:bg-white/10 hover:text-white cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
             {sidebarContent}
           </div>
         </div>
