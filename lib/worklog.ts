@@ -11,78 +11,61 @@ const DASHBOARD_WINDOW_DAYS = 30;
 
 export class WorklogError extends Error {}
 
-/** Get all defined sections, ensuring default sections exist if empty. */
+/** Get every section that has ever been created, across all dates. */
 export async function getSections(): Promise<SectionRow[]> {
-  try {
-    const rows = await db
-      .select()
-      .from(sections)
-      .orderBy(asc(sections.order), asc(sections.createdAt));
-
-    if (rows.length === 0) {
-      const defaultSections = [
-        { name: "My Logs", order: 0 },
-      ];
-      const created = await db
-        .insert(sections)
-        .values(defaultSections)
-        .returning();
-      return created;
-    }
-
-    return rows;
-  } catch (e) {
-    console.error("Failed to query sections table, using fallback:", e);
-    return [
-      { id: "s1", name: "My Logs", date: null, order: 0, createdAt: new Date(), updatedAt: new Date() },
-    ];
-  }
+  return db
+    .select()
+    .from(sections)
+    .orderBy(asc(sections.order), asc(sections.createdAt));
 }
 
+/** Get sections scoped to one specific date only — never leaks another date's rows. */
+export async function getSectionsForDate(date: string): Promise<SectionRow[]> {
+  return db
+    .select()
+    .from(sections)
+    .where(eq(sections.date, date))
+    .orderBy(asc(sections.order), asc(sections.createdAt));
+}
 
-
-/** Create a new section (list) */
+/**
+ * Create a section, scoped to a date. Dedupes on (name, date) — the same name
+ * on two different dates is two distinct rows, never the same shared row.
+ * `date` always defaults to today: sections are never dateless/global going forward.
+ */
 export async function createSection(name: string, date?: string): Promise<SectionRow> {
   const trimmed = name.trim();
   if (!trimmed) {
     throw new WorklogError("Section name cannot be empty.");
   }
+  const targetDate = date?.trim() || todayIST();
 
-  try {
-    const existing = await db
-      .select()
-      .from(sections)
-      .where(eq(sections.name, trimmed))
-      .limit(1);
+  const existing = await db
+    .select()
+    .from(sections)
+    .where(and(eq(sections.name, trimmed), eq(sections.date, targetDate)))
+    .limit(1);
 
-    if (existing.length > 0) {
-      return existing[0];
-    }
-
-    const allSections = await db.select().from(sections);
-    const maxOrder = allSections.reduce((max, s) => Math.max(max, s.order), 0);
-
-    const [created] = await db
-      .insert(sections)
-      .values({
-        name: trimmed,
-        date: date ?? null,
-        order: maxOrder + 1,
-      })
-      .returning();
-
-    return created;
-  } catch (e) {
-    console.error("Failed to create section in database table:", e);
-    return {
-      id: trimmed.toLowerCase().replace(/\s+/g, "-"),
-      name: trimmed,
-      date: date ?? null,
-      order: 99,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+  if (existing.length > 0) {
+    return existing[0];
   }
+
+  const dateSections = await db
+    .select()
+    .from(sections)
+    .where(eq(sections.date, targetDate));
+  const maxOrder = dateSections.reduce((max, s) => Math.max(max, s.order), 0);
+
+  const [created] = await db
+    .insert(sections)
+    .values({
+      name: trimmed,
+      date: targetDate,
+      order: maxOrder + 1,
+    })
+    .returning();
+
+  return created;
 }
 
 /** Update section title by id or current name */
@@ -155,10 +138,14 @@ export async function moveEntryToSection(
       .from(sections)
       .where(eq(sections.id, trimmed))
       .limit(1);
+    if (!row) {
+      throw new WorklogError(`Section not found: ${trimmed}`);
+    }
     targetSec = row;
-  }
-
-  if (!targetSec) {
+  } else {
+    // Not a UUID — treat it as a section name to create/find (only reachable
+    // from callers that pass a name directly, e.g. MCP tools; the board's
+    // drag-and-drop always passes a real section id).
     targetSec = await createSection(trimmed);
   }
 
@@ -196,21 +183,24 @@ export async function createOrAppendEntry(input: {
   let secRow: SectionRow | undefined;
 
   if (input.sectionId) {
+    const trimmedId = input.sectionId.trim();
     const isUuid =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        input.sectionId.trim(),
+        trimmedId,
       );
-    if (isUuid) {
-      const [found] = await db
-        .select()
-        .from(sections)
-        .where(eq(sections.id, input.sectionId.trim()))
-        .limit(1);
-      secRow = found;
+    if (!isUuid) {
+      throw new WorklogError(`Invalid section id: ${trimmedId}`);
     }
-  }
-
-  if (!secRow) {
+    const [found] = await db
+      .select()
+      .from(sections)
+      .where(eq(sections.id, trimmedId))
+      .limit(1);
+    if (!found) {
+      throw new WorklogError(`Section not found: ${trimmedId}`);
+    }
+    secRow = found;
+  } else {
     const sName = input.sectionName?.trim() || "My Tasks";
     secRow = await createSection(sName, entryDate);
   }
@@ -400,88 +390,69 @@ export type SectionWithEntries = SectionRow & {
   entries: EntryRow[];
 };
 
-export async function getBoardData(options?: {
-  filterToday?: boolean;
-  date?: string;
+/**
+ * Board for exactly one date. Sections are fetched strictly by their own
+ * `date` column — never by name, never a global list — so a section shown
+ * here is always physically scoped to this date. No section is ever
+ * auto-created here; a date with none simply returns an empty list.
+ */
+export async function getBoardData(options: {
+  date: string;
   search?: string;
 }): Promise<{
   sections: SectionWithEntries[];
-  allSectionList: SectionRow[];
 }> {
-  const allSections = await getSections();
+  const targetDate = options.date.trim();
 
-  const conditions = [isNull(entries.deletedAt)];
-  const targetDateFilter = options?.date?.trim() || (options?.filterToday ? todayIST() : undefined);
-  if (targetDateFilter) {
-    conditions.push(eq(entries.date, targetDateFilter));
-  }
-  if (options?.search && options.search.trim() !== "") {
-    const term = `%${options.search.trim()}%`;
-    const searchCond = ilike(entries.summary, term);
+  const dateSections = await getSectionsForDate(targetDate);
+
+  const conditions = [isNull(entries.deletedAt), eq(entries.date, targetDate)];
+  if (options.search && options.search.trim() !== "") {
+    const searchCond = ilike(entries.summary, `%${options.search.trim()}%`);
     if (searchCond) {
       conditions.push(searchCond);
     }
   }
 
-  const allEntries = await db
+  const dateEntries = await db
     .select()
     .from(entries)
     .where(and(...conditions))
     .orderBy(asc(entries.createdAt));
 
   const sectionMap = new Map<string, EntryRow[]>();
-  allSections.forEach((s) => sectionMap.set(s.id, []));
+  dateSections.forEach((s) => sectionMap.set(s.id, []));
 
-  allEntries.forEach((entry) => {
-    const sId = entry.sectionId;
-    if (sId && sectionMap.has(sId)) {
-      sectionMap.get(sId)!.push(entry);
-    } else if (allSections.length > 0) {
-      // Fallback to first section if unlinked
-      sectionMap.get(allSections[0].id)!.push(entry);
+  dateEntries.forEach((entry) => {
+    if (entry.sectionId && sectionMap.has(entry.sectionId)) {
+      sectionMap.get(entry.sectionId)!.push(entry);
     }
   });
 
-  let resultSections: SectionWithEntries[] = [];
+  const resultSections: SectionWithEntries[] = dateSections.map((s) => ({
+    ...s,
+    entries: sectionMap.get(s.id) || [],
+  }));
 
-  allSections.forEach((s) => {
-    resultSections.push({
-      ...s,
-      entries: sectionMap.get(s.id) || [],
-    });
-  });
+  return { sections: resultSections };
+}
 
-  // When viewing today or a specific date, filter sections so yesterday's sections are hidden
-  const isFilteredByDate = Boolean(options?.filterToday || options?.date);
-  const targetDate = options?.date?.trim() || (options?.filterToday ? todayIST() : undefined);
+/** Delete a section — refuses if it still has any active (non-deleted) entries. */
+export async function deleteSection(id: string): Promise<void> {
+  const [row] = await db
+    .select({ value: count() })
+    .from(entries)
+    .where(and(eq(entries.sectionId, id), isNull(entries.deletedAt)));
 
-  if (isFilteredByDate && targetDate) {
-    resultSections = resultSections.filter((sec) => {
-      // Keep section if it has entries for this date, or if it matches the target date or name
-      if (sec.entries.length > 0) return true;
-      if (sec.date === targetDate) return true;
-      if (sec.name === "My Tasks" || sec.name === "Today") return true;
-      if (sec.name === `Logs for ${targetDate}`) return true;
-      return false;
-    });
-
-    // If no section exists for today yet, ensure a clean "My Tasks" section is returned
-    if (resultSections.length === 0) {
-      const defaultSecName = "My Tasks";
-      const createdSec = await createSection(defaultSecName, targetDate);
-      resultSections = [
-        {
-          ...createdSec,
-          entries: [],
-        },
-      ];
-    }
+  if (Number(row?.value ?? 0) > 0) {
+    throw new WorklogError("Section is not empty — move or remove its logs first.");
   }
 
-  return {
-    sections: resultSections,
-    allSectionList: allSections,
-  };
+  const deleted = await db.delete(sections).where(eq(sections.id, id)).returning();
+
+  if (deleted.length === 0) {
+    throw new WorklogError(`Section not found: ${id}`);
+  }
 }
 
 export async function updateSectionOrder(

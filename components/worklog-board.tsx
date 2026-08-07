@@ -11,6 +11,7 @@ import {
   useSensor,
   useSensors,
   DragStartEvent,
+  DragOverEvent,
   DragEndEvent,
 } from "@dnd-kit/core";
 import {
@@ -21,21 +22,23 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { ListChecks } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SectionCard } from "@/components/section-card";
 import type { EntryRow, SectionWithEntries } from "@/lib/worklog";
 
 interface WorklogBoardProps {
   initialSections: SectionWithEntries[];
-  visibleSectionNames?: string[];
   onRefresh?: () => void;
 }
 
 function SortableSectionItem({
   section,
+  isDropTarget,
   onRefresh,
 }: {
   section: SectionWithEntries;
+  isDropTarget: boolean;
   onRefresh: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -59,19 +62,17 @@ function SortableSectionItem({
         section={section}
         onRefresh={onRefresh}
         dragHandleProps={{ ...attributes, ...listeners }}
+        isDropTarget={isDropTarget}
       />
     </div>
   );
 }
 
-export function WorklogBoard({
-  initialSections,
-  visibleSectionNames,
-  onRefresh,
-}: WorklogBoardProps) {
+export function WorklogBoard({ initialSections, onRefresh }: WorklogBoardProps) {
   const [sectionsList, setSectionsList] = useState<SectionWithEntries[]>(initialSections);
   const [activeLog, setActiveLog] = useState<EntryRow | null>(null);
   const [activeSection, setActiveSection] = useState<SectionWithEntries | null>(null);
+  const [overSectionId, setOverSectionId] = useState<string | null>(null);
 
   useEffect(() => {
     setSectionsList(initialSections);
@@ -83,10 +84,6 @@ export function WorklogBoard({
     useSensor(TouchSensor, { activationConstraint: { delay: 100, tolerance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
-
-  const displayedSections = visibleSectionNames
-    ? sectionsList.filter((s) => visibleSectionNames.includes(s.name))
-    : sectionsList;
 
   function handleDragStart(event: DragStartEvent) {
     const { active } = event;
@@ -107,9 +104,26 @@ export function WorklogBoard({
     }
   }
 
+  function handleDragOver(event: DragOverEvent) {
+    const { active, over } = event;
+    if (!over || active.data.current?.type !== "log") {
+      setOverSectionId(null);
+      return;
+    }
+
+    const sourceSectionId = active.data.current?.sectionId;
+    let targetId: string | undefined = over.data.current?.sectionId;
+    if (!targetId && String(over.id).startsWith("section-")) {
+      targetId = String(over.id).replace(/^section-/, "");
+    }
+
+    setOverSectionId(targetId && targetId !== sourceSectionId ? targetId : null);
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
     setActiveLog(null);
     setActiveSection(null);
+    setOverSectionId(null);
 
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -203,28 +217,40 @@ export function WorklogBoard({
 
   return (
     <DndContext
+      id="worklog-board"
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <div className="flex h-full w-full overflow-x-auto p-4 sm:p-6 gap-4 items-start scrollbar-thin scrollbar-thumb-[#2e2f33] scroll-smooth">
         <SortableContext
-          items={displayedSections.map((s) => `section-${s.id || s.name}`)}
+          items={sectionsList.map((s) => `section-${s.id}`)}
           strategy={horizontalListSortingStrategy}
         >
-          {displayedSections.map((sec) => (
+          {sectionsList.map((sec) => (
             <SortableSectionItem
-              key={sec.id || sec.name}
+              key={sec.id}
               section={sec}
+              isDropTarget={overSectionId === sec.id}
               onRefresh={onRefresh || (() => {})}
             />
           ))}
         </SortableContext>
 
-        {displayedSections.length === 0 && (
-          <div className="flex h-64 w-full items-center justify-center rounded-2xl border border-dashed border-[#2e2f33] text-[#9aa0a6]">
-            No sections selected. Select sections from the sidebar.
+        {sectionsList.length === 0 && (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-3 py-20 text-center">
+            <div className="relative mb-2 flex h-20 w-24 items-center justify-center">
+              <div className="flex h-14 w-20 items-center justify-center rounded-2xl border border-[#3c4043] bg-[#28292c]">
+                <ListChecks className="h-7 w-7 text-[#8ab4f8]" />
+              </div>
+            </div>
+            <h3 className="text-[17px] font-semibold text-[#e8eaed]">No sections yet</h3>
+            <p className="max-w-[280px] text-[13px] text-[#9aa0a6]">
+              This date has no sections. Create one from the sidebar to start
+              organizing logs here.
+            </p>
           </div>
         )}
       </div>

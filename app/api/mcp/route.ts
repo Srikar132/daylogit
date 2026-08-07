@@ -1,10 +1,11 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { z } from "zod";
 import { verifyApiKey } from "@/lib/auth";
+import { todayIST } from "@/lib/date";
 import {
   createOrAppendEntry,
   createSection,
-  getSections,
+  getSectionsForDate,
   getTodayEntries,
   previewSummary,
   searchEntries,
@@ -18,24 +19,36 @@ const handler = createMcpHandler(
     server.registerTool(
       "get_sections",
       {
-        title: "Get worklog sections/lists",
+        title: "Get worklog sections/lists for a date",
         description:
-          "Returns active list sections in DayLog including section IDs, names, and optional bound dates.",
-        inputSchema: {},
+          "Returns the sections that exist for one date (defaults to today, IST). " +
+          "Sections are unique per date — the same name on two different dates is two separate sections.",
+        inputSchema: {
+          date: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/)
+            .optional()
+            .describe("YYYY-MM-DD, defaults to today in IST"),
+        },
       },
-      async () => {
-        const sectionsList = await getSections();
+      async ({ date }) => {
+        const targetDate = date || todayIST();
+        const sectionsList = await getSectionsForDate(targetDate);
+        if (sectionsList.length === 0) {
+          return {
+            content: [
+              { type: "text", text: `No sections exist yet for ${targetDate}.` },
+            ],
+          };
+        }
         const textList = sectionsList
-          .map(
-            (s) =>
-              `- [id: ${s.id}] '${s.name}'${s.date ? ` (date: ${s.date})` : ""}`,
-          )
+          .map((s) => `- [id: ${s.id}] '${s.name}'`)
           .join("\n");
         return {
           content: [
             {
               type: "text",
-              text: `Available sections (${sectionsList.length}):\n${textList}`,
+              text: `Sections for ${targetDate} (${sectionsList.length}):\n${textList}`,
             },
           ],
         };
@@ -47,7 +60,8 @@ const handler = createMcpHandler(
       {
         title: "Create a worklog section",
         description:
-          "Creates a new section (list column) in DayLog (e.g. 'My Tasks', 'Sprint Notes', or date-bound section).",
+          "Creates a new section (list column) in DayLog for one date (defaults to today, IST). " +
+          "Sections are always scoped to a date — the same name on a different date creates a distinct section.",
         inputSchema: {
           name: z
             .string()
@@ -56,16 +70,16 @@ const handler = createMcpHandler(
             .string()
             .regex(/^\d{4}-\d{2}-\d{2}$/)
             .optional()
-            .describe("Optional date YYYY-MM-DD for date-bound section"),
+            .describe("YYYY-MM-DD, defaults to today in IST"),
         },
       },
       async ({ name, date }) => {
-        const sec = await createSection(name, date);
+        const sec = await createSection(name, date || todayIST());
         return {
           content: [
             {
               type: "text",
-              text: `Section '${sec.name}' [id: ${sec.id}] created successfully.`,
+              text: `Section '${sec.name}' [id: ${sec.id}] created for ${sec.date}.`,
             },
           ],
         };

@@ -1,9 +1,9 @@
 "use client";
 
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar as CalendarIcon, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { todayIST } from "@/lib/date";
+import { formatDateLabel, todayIST } from "@/lib/date";
 
 export function WorklogCalendarPicker() {
   const router = useRouter();
@@ -11,9 +11,9 @@ export function WorklogCalendarPicker() {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const currentDateParam = searchParams.get("date") || (searchParams.get("today") === "true" ? todayIST() : todayIST());
-  
-  const initialDate = currentDateParam ? new Date(currentDateParam) : new Date();
+  const currentDateParam = searchParams.get("date") || todayIST();
+
+  const initialDate = new Date(`${currentDateParam}T00:00:00`);
   const [viewYear, setViewYear] = useState(initialDate.getFullYear());
   const [viewMonth, setViewMonth] = useState(initialDate.getMonth());
 
@@ -30,14 +30,7 @@ export function WorklogCalendarPicker() {
   function handleSelectDate(year: number, month: number, day: number) {
     const formattedDate = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     const params = new URLSearchParams(searchParams.toString());
-    params.delete("q");
-    if (formattedDate === todayIST()) {
-      params.set("today", "true");
-    } else {
-      params.delete("today");
-    }
     params.set("date", formattedDate);
-    params.set("page", "1");
     router.push(`/?${params.toString()}`);
     setIsOpen(false);
   }
@@ -69,26 +62,31 @@ export function WorklogCalendarPicker() {
   const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
 
   const isTodaySelected = currentDateParam === todayIST();
+  const chipLabel = formatDateLabel(currentDateParam);
 
   return (
     <div className="relative" ref={containerRef}>
-      {/* Premium Fully-Rounded "Today" Trigger Button */}
+      {/* Premium centered date chip */}
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`flex cursor-pointer items-center gap-2.5 rounded-full border px-5 py-2.5 text-[14px] font-semibold transition-all shadow-md active:scale-95 ${
+        className={`flex cursor-pointer items-center gap-2.5 rounded-full border px-5 py-2 text-[14px] font-semibold tracking-tight transition-all shadow-[0_1px_2px_rgba(0,0,0,0.3)] active:scale-95 ${
           isTodaySelected
-            ? "border-[#8ab4f8] bg-[#004a77] text-[#c2e7ff] ring-2 ring-[#8ab4f8]/40"
-            : "border-white/10 bg-[#131314] text-[#e8eaed] hover:border-[#8ab4f8]/50 hover:bg-[#28292c]"
+            ? "border-[#8ab4f8]/50 bg-gradient-to-b from-[#1a3a5c] to-[#12324f] text-[#c2e7ff]"
+            : "border-white/10 bg-[#131314] text-[#e8eaed] hover:border-[#8ab4f8]/40 hover:bg-[#28292c]"
         }`}
       >
         <CalendarIcon className="h-4 w-4 text-[#8ab4f8]" />
-        <span>Today</span>
+        <span>{chipLabel}</span>
+        {!isTodaySelected && (
+          <span className="text-[11px] font-medium text-[#9aa0a6]">{currentDateParam}</span>
+        )}
+        <ChevronDown className={`h-3.5 w-3.5 text-[#9aa0a6] transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
 
       {/* Calendar Dropdown Popover */}
       {isOpen && (
-        <div className="absolute right-0 top-14 z-50 w-72 rounded-2xl border border-white/10 bg-[#131314] p-4 text-[#e8eaed] shadow-2xl backdrop-blur-xl">
+        <div className="absolute left-1/2 top-14 z-50 w-72 -translate-x-1/2 rounded-2xl border border-white/10 bg-[#131314] p-4 text-[#e8eaed] shadow-2xl backdrop-blur-xl">
 
           {/* Month Header */}
           <div className="flex items-center justify-between pb-3 border-b border-white/5 mb-3">

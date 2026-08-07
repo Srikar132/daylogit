@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createSection, getSections, updateSection, updateSectionOrder } from "@/lib/worklog";
+import { todayIST } from "@/lib/date";
+import { createSection, deleteSection, getSections, updateSection, updateSectionOrder } from "@/lib/worklog";
 
 export async function GET() {
   const sectionsList = await getSections();
@@ -15,6 +16,10 @@ const createSchema = z.object({
 const updateSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
+});
+
+const deleteSchema = z.object({
+  id: z.string().min(1),
 });
 
 const reorderSchema = z.object({
@@ -35,7 +40,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true });
     } else {
       const parsed = createSchema.parse(body);
-      const newSection = await createSection(parsed.name, parsed.date);
+      const newSection = await createSection(parsed.name, parsed.date || todayIST());
       return NextResponse.json(newSection);
     }
   } catch (err: unknown) {
@@ -50,6 +55,18 @@ export async function PATCH(request: Request) {
     const parsed = updateSchema.parse(body);
     const updated = await updateSection(parsed.id, parsed.name);
     return NextResponse.json(updated);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Invalid request";
+    return NextResponse.json({ error: msg }, { status: 400 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = await request.json();
+    const parsed = deleteSchema.parse(body);
+    await deleteSection(parsed.id);
+    return NextResponse.json({ success: true });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Invalid request";
     return NextResponse.json({ error: msg }, { status: 400 });

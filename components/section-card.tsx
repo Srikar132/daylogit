@@ -1,56 +1,42 @@
+"use client";
+
 import {
   SortableContext,
   useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import {
-  FileText,
-  GripVertical,
-  MoreVertical,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { DeleteConfirmModal } from "@/components/delete-confirm-modal";
-import { EditEntryModal } from "@/components/edit-entry-modal";
+import { ChevronDown, GripVertical, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { EntryRow, SectionWithEntries } from "@/lib/worklog";
+
+const SECTION_MIN_HEIGHT = 420;
 
 interface SectionCardProps {
   section: SectionWithEntries;
   onRefresh?: () => void;
   dragHandleProps?: Record<string, unknown>;
+  isDropTarget?: boolean;
 }
 
 export function DraggableLogItem({
   log,
   sectionId,
-  onRefresh,
 }: {
   log: EntryRow;
   sectionId: string;
-  onRefresh?: () => void;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isEditingModalOpen, setIsEditingModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: `log-${log.id}`,
-    data: {
-      type: "log",
-      logId: log.id,
-      sectionId,
-    },
-  });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({
+      id: `log-${log.id}`,
+      data: {
+        type: "log",
+        logId: log.id,
+        sectionId,
+      },
+    });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -60,155 +46,75 @@ export function DraggableLogItem({
   };
 
   return (
-    <>
-      <div
-        ref={setNodeRef}
-        style={style}
+    <div ref={setNodeRef} style={style} className="group">
+      <button
+        type="button"
         onClick={() => setIsExpanded((prev) => !prev)}
-        className="group flex cursor-pointer items-start gap-2.5 rounded-2xl p-3 bg-[#1e1f20]/60 border border-white/[0.04] transition-all hover:bg-[#1e1f20] hover:border-white/10 shadow-sm relative"
+        className="flex w-full cursor-pointer items-start gap-2.5 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-left transition-colors hover:border-white/[0.12] hover:bg-white/[0.045]"
       >
         <div
           {...attributes}
           {...listeners}
           title="Drag log to move"
-          className="mt-1 text-[#5f6368] opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing hover:text-[#8ab4f8] transition-opacity p-0.5 touch-none"
+          className="mt-0.5 shrink-0 text-[#5f6368] opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing hover:text-[#8ab4f8] transition-opacity touch-none"
         >
           <GripVertical className="h-3.5 w-3.5" />
         </div>
 
-        <div className="mt-1.5 h-2 w-2 rounded-full bg-[#8ab4f8] shrink-0 group-hover:bg-[#a8c7fa] transition-colors" />
-
-        <div className="flex flex-1 flex-col min-w-0 pr-12">
-          {log.title && (
-            <span className="text-[14px] font-medium text-[#e8eaed] break-words mb-0.5">
-              {log.title}
+        <div className="flex flex-1 flex-col min-w-0">
+          <div className="flex items-start gap-2">
+            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#e8eaed]">
+              {log.title || " "}
             </span>
-          )}
+            <ChevronDown
+              className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-[#5f6368] transition-transform ${
+                isExpanded ? "rotate-180" : ""
+              }`}
+            />
+          </div>
           <div
-            className={`text-[12.5px] text-[#c4c7c5] break-words whitespace-pre-wrap leading-relaxed transition-all ${
+            className={`mt-1 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-[#9aa0a6] ${
               isExpanded
-                ? "max-h-60 overflow-y-auto pr-1 scrollbar-thin"
-                : "line-clamp-2 group-hover:line-clamp-none group-hover:max-h-60 group-hover:overflow-y-auto group-hover:pr-1 group-hover:scrollbar-thin"
+                ? "max-h-72 overflow-y-auto pr-1 scrollbar-thin"
+                : "line-clamp-2"
             }`}
           >
             {log.summary}
           </div>
-          {log.date && (
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
-              <span className="rounded-full bg-white/5 border border-white/10 px-2 py-0.5 text-[10.5px] text-[#9aa0a6]">
-                {log.date}
-              </span>
-            </div>
-          )}
         </div>
-
-        {/* Hover Action Buttons for Editing & Deleting */}
-        <div className="absolute right-2 top-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            type="button"
-            title="Edit log details"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsEditingModalOpen(true);
-            }}
-            className="rounded-full p-1 text-[#9aa0a6] hover:bg-white/10 hover:text-white cursor-pointer"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            title="Delete log"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsDeleteModalOpen(true);
-            }}
-            className="rounded-full p-1 text-[#9aa0a6] hover:bg-white/10 hover:text-[#f28b82] cursor-pointer"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {isEditingModalOpen && (
-        <EditEntryModal
-          isOpen={isEditingModalOpen}
-          onClose={() => {
-            setIsEditingModalOpen(false);
-            if (onRefresh) onRefresh();
-          }}
-          entry={log}
-        />
-      )}
-
-      {isDeleteModalOpen && (
-        <DeleteConfirmModal
-          isOpen={isDeleteModalOpen}
-          onClose={() => {
-            setIsDeleteModalOpen(false);
-            if (onRefresh) onRefresh();
-          }}
-          entry={log}
-        />
-      )}
-    </>
+      </button>
+    </div>
   );
 }
 
-export function SectionCard({ section, onRefresh, dragHandleProps }: SectionCardProps) {
-  const [isAdding, setIsAdding] = useState(false);
+export function SectionCard({ section, onRefresh, dragHandleProps, isDropTarget }: SectionCardProps) {
   const [isRenamingSection, setIsRenamingSection] = useState(false);
   const [sectionTitleName, setSectionTitleName] = useState(section.name);
-  const [title, setTitle] = useState("");
-  const [details, setDetails] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     setSectionTitleName(section.name);
   }, [section.name]);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setShowMenu(false);
-      }
-    }
-    if (showMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showMenu]);
-
   const logsList = section.entries;
+  const isEmpty = logsList.length === 0;
 
-  async function handleCreateLog(e: React.FormEvent) {
-    e.preventDefault();
-    if (!details.trim() && !title.trim()) return;
+  async function handleDeleteSection() {
+    if (!isEmpty || isDeleting) return;
+    if (!window.confirm(`Delete "${section.name}"? This can't be undone.`)) return;
 
-    setIsSubmitting(true);
+    setIsDeleting(true);
     try {
-      const res = await fetch("/api/entries/create", {
-        method: "POST",
+      const res = await fetch("/api/sections", {
+        method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: title.trim() || undefined,
-          summary: details.trim() || title.trim(),
-          sectionId: section.id,
-          date: section.date || undefined,
-        }),
+        body: JSON.stringify({ id: section.id }),
       });
-
-      if (res.ok) {
-        setTitle("");
-        setDetails("");
-        setIsAdding(false);
-        if (onRefresh) onRefresh();
-      }
+      if (res.ok && onRefresh) onRefresh();
     } catch (err) {
-      console.error("Failed to create log entry", err);
+      console.error("Failed to delete section", err);
     } finally {
-      setIsSubmitting(false);
+      setIsDeleting(false);
     }
   }
 
@@ -240,7 +146,11 @@ export function SectionCard({ section, onRefresh, dragHandleProps }: SectionCard
   }
 
   return (
-    <div className="group/card flex w-80 md:w-[355px] shrink-0 flex-col rounded-3xl bg-[#131314] p-4 shadow-2xl border border-white/[0.06] transition-all">
+    <div
+      className={`group/card flex w-80 md:w-[355px] shrink-0 flex-col rounded-3xl bg-[#131314] p-4 shadow-2xl border transition-all ${
+        isDropTarget ? "border-[#8ab4f8]/70 ring-2 ring-[#8ab4f8]/30" : "border-white/[0.06]"
+      }`}
+    >
       {/* Top Drag Handle Pill */}
       <div
         {...dragHandleProps}
@@ -249,17 +159,17 @@ export function SectionCard({ section, onRefresh, dragHandleProps }: SectionCard
       />
 
       {/* Header Bar */}
-      <div className="flex items-center justify-between pb-3 select-none">
+      <div className="flex items-center gap-2 pb-3 select-none">
         {!isRenamingSection ? (
           <h2
             onDoubleClick={() => setIsRenamingSection(true)}
             title="Double-click to rename section"
-            className="text-[17px] font-medium text-[#e8eaed] truncate max-w-[240px] cursor-pointer hover:text-white"
+            className="min-w-0 flex-1 truncate text-[17px] font-medium text-[#e8eaed] cursor-pointer hover:text-white"
           >
             {section.name}
           </h2>
         ) : (
-          <form onSubmit={handleSaveSectionName} className="flex-1 pr-2">
+          <form onSubmit={handleSaveSectionName} className="flex-1">
             <input
               type="text"
               value={sectionTitleName}
@@ -271,105 +181,27 @@ export function SectionCard({ section, onRefresh, dragHandleProps }: SectionCard
           </form>
         )}
 
-        <div className="relative" ref={menuRef}>
+        {isEmpty && !isRenamingSection && (
           <button
             type="button"
-            onClick={() => setShowMenu((prev) => !prev)}
-            className="rounded-full p-1.5 text-[#9aa0a6] hover:bg-white/10 hover:text-white cursor-pointer"
+            title="Delete empty section"
+            onClick={handleDeleteSection}
+            disabled={isDeleting}
+            className="shrink-0 rounded-full p-1.5 text-[#5f6368] opacity-0 transition-all group-hover/card:opacity-100 hover:bg-[#f28b82]/10 hover:text-[#f28b82] disabled:opacity-50 cursor-pointer"
           >
-            <MoreVertical className="h-4 w-4" />
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
-          {showMenu && (
-            <div className="absolute right-0 top-8 z-30 w-44 rounded-xl border border-white/10 bg-[#1e1f20] py-1 text-[13px] text-[#e8eaed] shadow-2xl">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsRenamingSection(true);
-                  setShowMenu(false);
-                }}
-                className="flex w-full cursor-pointer items-center px-4 py-2 hover:bg-white/10"
-              >
-                Rename section
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAdding(true);
-                  setShowMenu(false);
-                }}
-                className="flex w-full cursor-pointer items-center px-4 py-2 hover:bg-white/10"
-              >
-                Add a log
-              </button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
-      {/* Inline Add Log Action Button */}
-      {!isAdding ? (
-        <button
-          type="button"
-          onClick={() => setIsAdding(true)}
-          className="flex w-full cursor-pointer items-center gap-3 rounded-full bg-[#1e1f20] px-4 py-2.5 text-[13.5px] font-medium text-[#8ab4f8] transition-all hover:bg-[#28292c] active:scale-[0.99]"
-        >
-          <Plus className="h-4 w-4 stroke-[2.5]" />
-          <span>Add a log</span>
-        </button>
-      ) : (
-        /* Google Tasks Inline Quick-Add Card */
-        <form
-          onSubmit={handleCreateLog}
-          className="rounded-2xl border border-white/10 bg-[#1e1f20] p-3 shadow-xl flex flex-col gap-2 my-1"
-        >
-          <div className="flex items-start gap-2.5">
-            <FileText className="h-4 w-4 text-[#8ab4f8] mt-1 shrink-0" />
-            <div className="flex flex-1 flex-col gap-1.5">
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Log Title"
-                autoFocus
-                className="w-full bg-transparent text-[14px] font-medium text-[#e8eaed] placeholder:text-[#9aa0a6] focus:outline-none"
-              />
-              <textarea
-                value={details}
-                onChange={(e) => setDetails(e.target.value)}
-                placeholder="Details (summary of work done)"
-                rows={2}
-                className="w-full resize-none bg-transparent text-[12.5px] text-[#c4c7c5] placeholder:text-[#80868b] focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/5">
-            <button
-              type="button"
-              onClick={() => {
-                setIsAdding(false);
-                setTitle("");
-                setDetails("");
-              }}
-              className="rounded-full px-3 py-1 text-[12px] font-medium text-[#9aa0a6] hover:bg-white/10 hover:text-white cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || (!title.trim() && !details.trim())}
-              className="rounded-full bg-[#8ab4f8] px-4 py-1 text-[12px] font-semibold text-[#141414] transition-all hover:bg-[#a8c7fa] disabled:opacity-50 cursor-pointer"
-            >
-              Save
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* Log List Content */}
-      <div className="mt-3 flex flex-1 flex-col gap-1.5 overflow-y-auto max-h-[540px] pr-1 scrollbar-thin">
-        {logsList.length === 0 && !isAdding ? (
-          /* Google Tasks Empty State Illustration */
+      {/* Log List Content — fixed min-height so a 1-entry section reads the
+          same size as a full one; only grows past max-height via scroll. */}
+      <div
+        style={{ minHeight: SECTION_MIN_HEIGHT }}
+        className="mt-1 flex flex-1 flex-col gap-1.5 overflow-y-auto max-h-[540px] pr-1 scrollbar-thin"
+      >
+        {logsList.length === 0 ? (
+          /* Empty-section illustration */
           <div className="my-auto flex flex-col items-center justify-center py-10 text-center">
             <div className="relative mb-3 flex h-16 w-20 items-center justify-center">
               <div className="h-10 w-16 rounded-lg bg-[#28292c] border border-[#3c4043] flex items-center justify-center">
@@ -383,7 +215,7 @@ export function SectionCard({ section, onRefresh, dragHandleProps }: SectionCard
               No logs yet
             </h3>
             <p className="mt-1 text-[12px] text-[#9aa0a6] max-w-[200px]">
-              Add your work logs to keep track of daily progress across DayLog
+              Logs added here (via Claude) will show up automatically
             </p>
           </div>
         ) : (
@@ -392,14 +224,15 @@ export function SectionCard({ section, onRefresh, dragHandleProps }: SectionCard
             strategy={verticalListSortingStrategy}
           >
             {logsList.map((log) => (
-              <DraggableLogItem
-                key={log.id}
-                log={log}
-                sectionId={section.id}
-                onRefresh={onRefresh}
-              />
+              <DraggableLogItem key={log.id} log={log} sectionId={section.id} />
             ))}
           </SortableContext>
+        )}
+
+        {isDropTarget && (
+          <div className="flex shrink-0 items-center justify-center rounded-2xl border-2 border-dashed border-[#8ab4f8]/60 bg-[#8ab4f8]/5 py-4 text-[12.5px] font-medium text-[#8ab4f8]">
+            Drop here
+          </div>
         )}
       </div>
     </div>
