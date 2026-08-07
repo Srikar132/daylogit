@@ -5,6 +5,7 @@ import { todayIST } from "@/lib/date";
 import {
   createOrAppendEntry,
   createSection,
+  deleteSection,
   getSectionsForDate,
   getTodayEntries,
   previewSummary,
@@ -104,6 +105,27 @@ const handler = createMcpHandler(
               type: "text",
               text: `Section updated to '${sec.name}' [id: ${sec.id}].`,
             },
+          ],
+        };
+      },
+    );
+
+    server.registerTool(
+      "delete_section",
+      {
+        title: "Delete a worklog section",
+        description:
+          "Deletes a section by id. Refuses if the section still has any active (non-deleted) entries — " +
+          "delete or move those entries first.",
+        inputSchema: {
+          id: z.string().describe("Section id to delete"),
+        },
+      },
+      async ({ id }) => {
+        await deleteSection(id);
+        return {
+          content: [
+            { type: "text", text: `Section [id: ${id}] deleted.` },
           ],
         };
       },
