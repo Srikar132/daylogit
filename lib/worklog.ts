@@ -6,6 +6,19 @@ import { isFillerSummary, type Category, type Project } from "@/lib/constants";
 export type EntryRow = typeof entries.$inferSelect;
 export type SectionRow = typeof sections.$inferSelect;
 
+/**
+ * Everything the board's list view needs to render a row — deliberately
+ * WITHOUT `summary`. The board renders titles only; the full row (summary
+ * included) is fetched lazily, on demand, by `getEntryById` when the detail
+ * dialog opens for one specific entry. Keeps the board query's cost flat
+ * regardless of how long individual summaries get or how many entries a
+ * date accumulates.
+ */
+export type EntryListItem = Pick<
+  EntryRow,
+  "id" | "title" | "sectionId" | "date" | "createdAt" | "updatedAt"
+>;
+
 const SUMMARY_PREVIEW_LENGTH = 200;
 const DASHBOARD_WINDOW_DAYS = 30;
 
@@ -387,7 +400,7 @@ export async function updateEntry(
 }
 
 export type SectionWithEntries = SectionRow & {
-  entries: EntryRow[];
+  entries: EntryListItem[];
 };
 
 /**
@@ -408,19 +421,29 @@ export async function getBoardData(options: {
 
   const conditions = [isNull(entries.deletedAt), eq(entries.date, targetDate)];
   if (options.search && options.search.trim() !== "") {
+    // Filtering still matches against the full summary text even though it's
+    // not part of the selected columns below — Postgres can reference a
+    // column in WHERE without it being in SELECT.
     const searchCond = ilike(entries.summary, `%${options.search.trim()}%`);
     if (searchCond) {
       conditions.push(searchCond);
     }
   }
 
-  const dateEntries = await db
-    .select()
+  const dateEntries: EntryListItem[] = await db
+    .select({
+      id: entries.id,
+      title: entries.title,
+      sectionId: entries.sectionId,
+      date: entries.date,
+      createdAt: entries.createdAt,
+      updatedAt: entries.updatedAt,
+    })
     .from(entries)
     .where(and(...conditions))
     .orderBy(asc(entries.createdAt));
 
-  const sectionMap = new Map<string, EntryRow[]>();
+  const sectionMap = new Map<string, EntryListItem[]>();
   dateSections.forEach((s) => sectionMap.set(s.id, []));
 
   dateEntries.forEach((entry) => {
@@ -435,6 +458,17 @@ export async function getBoardData(options: {
   }));
 
   return { sections: resultSections };
+}
+
+/** Full row (summary included) for the detail dialog — fetched lazily by id, never bulk. */
+export async function getEntryById(id: string): Promise<EntryRow | undefined> {
+  const [row] = await db
+    .select()
+    .from(entries)
+    .where(and(eq(entries.id, id), isNull(entries.deletedAt)))
+    .limit(1);
+
+  return row;
 }
 
 /** Delete a section — refuses if it still has any active (non-deleted) entries. */

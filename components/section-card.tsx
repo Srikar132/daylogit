@@ -6,9 +6,9 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, GripVertical, Trash2 } from "lucide-react";
+import { GripVertical, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { EntryRow, SectionWithEntries } from "@/lib/worklog";
+import type { EntryListItem, SectionWithEntries } from "@/lib/worklog";
 
 const SECTION_MIN_HEIGHT = 420;
 
@@ -17,17 +17,22 @@ interface SectionCardProps {
   onRefresh?: () => void;
   dragHandleProps?: Record<string, unknown>;
   isDropTarget?: boolean;
+  onOpenEntry?: (log: EntryListItem) => void;
 }
 
+// Title-only row — the list never fetches (or holds) a summary at all (see
+// lib/worklog.ts's EntryListItem); the full body only ever loads inside
+// EntryDetailDialog, lazily, for the one entry actually clicked. So there's
+// nothing to expand/collapse here anymore, just a click straight to the dialog.
 export function DraggableLogItem({
   log,
   sectionId,
+  onOpen,
 }: {
-  log: EntryRow;
+  log: EntryListItem;
   sectionId: string;
+  onOpen?: (log: EntryListItem) => void;
 }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({
       id: `log-${log.id}`,
@@ -49,45 +54,33 @@ export function DraggableLogItem({
     <div ref={setNodeRef} style={style} className="group">
       <button
         type="button"
-        onClick={() => setIsExpanded((prev) => !prev)}
-        className="flex w-full cursor-pointer items-start gap-2.5 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-left transition-colors hover:border-white/[0.12] hover:bg-white/[0.045]"
+        onClick={() => onOpen?.(log)}
+        className="flex w-full cursor-pointer items-center gap-2.5 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-left transition-colors hover:border-white/[0.12] hover:bg-white/[0.045]"
       >
         <div
           {...attributes}
           {...listeners}
           title="Drag log to move"
-          className="mt-0.5 shrink-0 text-[#5f6368] opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing hover:text-[#8ab4f8] transition-opacity touch-none"
+          className="shrink-0 text-[#5f6368] opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing hover:text-[#8ab4f8] transition-opacity touch-none"
         >
           <GripVertical className="h-3.5 w-3.5" />
         </div>
 
-        <div className="flex flex-1 flex-col min-w-0">
-          <div className="flex items-start gap-2">
-            <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#e8eaed]">
-              {log.title || " "}
-            </span>
-            <ChevronDown
-              className={`mt-0.5 h-3.5 w-3.5 shrink-0 text-[#5f6368] transition-transform ${
-                isExpanded ? "rotate-180" : ""
-              }`}
-            />
-          </div>
-          <div
-            className={`mt-1 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-[#9aa0a6] ${
-              isExpanded
-                ? "max-h-72 overflow-y-auto pr-1 scrollbar-thin"
-                : "line-clamp-2"
-            }`}
-          >
-            {log.summary}
-          </div>
-        </div>
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#e8eaed]">
+          {log.title || "Untitled log"}
+        </span>
       </button>
     </div>
   );
 }
 
-export function SectionCard({ section, onRefresh, dragHandleProps, isDropTarget }: SectionCardProps) {
+export function SectionCard({
+  section,
+  onRefresh,
+  dragHandleProps,
+  isDropTarget,
+  onOpenEntry,
+}: SectionCardProps) {
   const [isRenamingSection, setIsRenamingSection] = useState(false);
   const [sectionTitleName, setSectionTitleName] = useState(section.name);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -224,7 +217,12 @@ export function SectionCard({ section, onRefresh, dragHandleProps, isDropTarget 
             strategy={verticalListSortingStrategy}
           >
             {logsList.map((log) => (
-              <DraggableLogItem key={log.id} log={log} sectionId={section.id} />
+              <DraggableLogItem
+                key={log.id}
+                log={log}
+                sectionId={section.id}
+                onOpen={onOpenEntry}
+              />
             ))}
           </SortableContext>
         )}

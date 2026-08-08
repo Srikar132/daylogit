@@ -23,9 +23,11 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ListChecks } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { EntryDetailDialog } from "@/components/entry-detail-dialog";
 import { SectionCard } from "@/components/section-card";
-import type { EntryRow, SectionWithEntries } from "@/lib/worklog";
+import type { EntryListItem, SectionWithEntries } from "@/lib/worklog";
 
 interface WorklogBoardProps {
   initialSections: SectionWithEntries[];
@@ -36,10 +38,12 @@ function SortableSectionItem({
   section,
   isDropTarget,
   onRefresh,
+  onOpenEntry,
 }: {
   section: SectionWithEntries;
   isDropTarget: boolean;
   onRefresh: () => void;
+  onOpenEntry: (log: EntryListItem) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({
@@ -63,20 +67,42 @@ function SortableSectionItem({
         onRefresh={onRefresh}
         dragHandleProps={{ ...attributes, ...listeners }}
         isDropTarget={isDropTarget}
+        onOpenEntry={onOpenEntry}
       />
     </div>
   );
 }
 
 export function WorklogBoard({ initialSections, onRefresh }: WorklogBoardProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // The dialog's open/closed entry lives in the URL (?entry=<id>), same
+  // convention as ?date= for the day picker — shareable/bookmarkable, and the
+  // browser's own back button closes it. There's still only ever ONE dialog
+  // instance mounted (below); the id just comes from the URL instead of
+  // local state, it doesn't change how many dialogs exist.
+  const openEntryId = searchParams.get("entry");
+
   const [sectionsList, setSectionsList] = useState<SectionWithEntries[]>(initialSections);
-  const [activeLog, setActiveLog] = useState<EntryRow | null>(null);
+  const [activeLog, setActiveLog] = useState<EntryListItem | null>(null);
   const [activeSection, setActiveSection] = useState<SectionWithEntries | null>(null);
   const [overSectionId, setOverSectionId] = useState<string | null>(null);
 
   useEffect(() => {
     setSectionsList(initialSections);
   }, [initialSections]);
+
+  const openEntrySectionName = openEntryId
+    ? sectionsList.find((s) => s.entries.some((e) => e.id === openEntryId))?.name
+    : undefined;
+
+  function pushEntryParam(id: string | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (id) params.set("entry", id);
+    else params.delete("entry");
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
@@ -95,7 +121,7 @@ export function WorklogBoard({ initialSections, onRefresh }: WorklogBoardProps) 
       if (foundSec) setActiveSection(foundSec);
     } else if (type === "log") {
       const logId = active.data.current?.logId;
-      let foundLog: EntryRow | undefined;
+      let foundLog: EntryListItem | undefined;
       for (const sec of sectionsList) {
         foundLog = sec.entries.find((e) => e.id === logId);
         if (foundLog) break;
@@ -172,7 +198,7 @@ export function WorklogBoard({ initialSections, onRefresh }: WorklogBoardProps) 
       if (logId && targetSectionId && targetSectionId !== sourceSectionId) {
         // Optimistic State Update
         setSectionsList((prevSections) => {
-          let draggedLog: EntryRow | null = null;
+          let draggedLog: EntryListItem | null = null;
           const next = prevSections.map((sec) => {
             if (sec.id === sourceSectionId) {
               const remaining = sec.entries.filter((e) => {
@@ -235,6 +261,7 @@ export function WorklogBoard({ initialSections, onRefresh }: WorklogBoardProps) 
               section={sec}
               isDropTarget={overSectionId === sec.id}
               onRefresh={onRefresh || (() => {})}
+              onOpenEntry={(log) => pushEntryParam(log.id)}
             />
           ))}
         </SortableContext>
@@ -261,21 +288,20 @@ export function WorklogBoard({ initialSections, onRefresh }: WorklogBoardProps) 
             <SectionCard section={activeSection} />
           </div>
         ) : activeLog ? (
-          <div className="rounded-2xl p-3.5 bg-[#1e1f20] border border-[#8ab4f8] shadow-2xl w-72 md:w-80 cursor-grabbing opacity-95">
-            <div className="flex items-center gap-2 mb-1">
-              <div className="h-2 w-2 rounded-full bg-[#8ab4f8]" />
-              {activeLog.title && (
-                <span className="text-[14px] font-semibold text-[#e8eaed] truncate">
-                  {activeLog.title}
-                </span>
-              )}
-            </div>
-            <p className="text-[12.5px] text-[#c4c7c5] line-clamp-2 leading-relaxed">
-              {activeLog.summary}
-            </p>
+          <div className="flex items-center gap-2 rounded-2xl p-3.5 bg-[#1e1f20] border border-[#8ab4f8] shadow-2xl w-72 md:w-80 cursor-grabbing opacity-95">
+            <div className="h-2 w-2 shrink-0 rounded-full bg-[#8ab4f8]" />
+            <span className="text-[14px] font-semibold text-[#e8eaed] truncate">
+              {activeLog.title || "Untitled log"}
+            </span>
           </div>
         ) : null}
       </DragOverlay>
+
+      <EntryDetailDialog
+        entryId={openEntryId}
+        sectionName={openEntrySectionName}
+        onClose={() => pushEntryParam(null)}
+      />
     </DndContext>
   );
 }
