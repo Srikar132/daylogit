@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { hasValidApiKey } from "@/lib/auth";
+import { getApiKeyIdentity } from "@/lib/auth";
 import {
   WorklogError,
   searchEntries,
@@ -26,7 +26,8 @@ const searchParamsSchema = z.object({
 });
 
 export async function GET(request: Request): Promise<NextResponse> {
-  if (!hasValidApiKey(request)) return unauthorized();
+  const identity = await getApiKeyIdentity(request);
+  if (!identity) return unauthorized();
 
   const { searchParams } = new URL(request.url);
   const parsed = searchParamsSchema.safeParse({
@@ -43,7 +44,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     );
   }
 
-  const result = await searchEntries(parsed.data);
+  const result = await searchEntries(identity.organizationId, parsed.data);
   return NextResponse.json(result);
 }
 
@@ -54,7 +55,8 @@ const patchBodySchema = z.object({
 });
 
 export async function PATCH(request: Request): Promise<NextResponse> {
-  if (!hasValidApiKey(request)) return unauthorized();
+  const identity = await getApiKeyIdentity(request);
+  if (!identity) return unauthorized();
 
   const parsed = patchBodySchema.safeParse(
     await request.json().catch(() => null),
@@ -68,7 +70,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
 
   try {
     const { id, ...patch } = parsed.data;
-    const row = await updateEntry(id, patch);
+    const row = await updateEntry(identity.organizationId, id, patch);
     return NextResponse.json(row);
   } catch (err) {
     if (err instanceof WorklogError) {
@@ -81,7 +83,8 @@ export async function PATCH(request: Request): Promise<NextResponse> {
 const deleteBodySchema = z.object({ id: z.string().uuid() });
 
 export async function DELETE(request: Request): Promise<NextResponse> {
-  if (!hasValidApiKey(request)) return unauthorized();
+  const identity = await getApiKeyIdentity(request);
+  if (!identity) return unauthorized();
 
   const parsed = deleteBodySchema.safeParse(
     await request.json().catch(() => null),
@@ -93,7 +96,7 @@ export async function DELETE(request: Request): Promise<NextResponse> {
     );
   }
 
-  const row = await softDeleteEntry(parsed.data.id);
+  const row = await softDeleteEntry(identity.organizationId, parsed.data.id);
   if (!row) {
     return NextResponse.json({ error: "Entry not found" }, { status: 404 });
   }

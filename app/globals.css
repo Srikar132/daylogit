@@ -262,3 +262,108 @@
   color: #5f6368;
   user-select: none;
 }
+
+/* ── Canvas widget nodes ────────────────────────────────────── */
+/* xyflow's own stylesheet puts cursor:grab on the whole node wrapper — since
+   our nodes use a `dragHandle` selector, only that handle should show grab;
+   the rest of the card (including its inner content) should read as a normal
+   surface, not "grab me anywhere". */
+.react-flow__node.draggable,
+.react-flow__node.draggable.dragging {
+  cursor: default;
+}
+
+/* xyflow themes itself via these CSS vars (see @xyflow/react/dist/style.css) —
+   set them once here instead of hand-overriding each subcomponent, so every
+   xyflow-rendered piece (controls, minimap, selection box, resize handles,
+   default node chrome) uses our existing dark palette instead of its own
+   default blue/white theme. */
+.react-flow {
+  --xy-background-color: #1e1f20;
+  --xy-background-pattern-dots-color: #2e2f33;
+  --xy-background-pattern-lines-color: #2e2f33;
+  --xy-background-pattern-cross-color: #2e2f33;
+
+  --xy-node-background-color: #131314;
+  --xy-node-border: 1px solid #2e2f33;
+  --xy-node-color: #e8eaed;
+  --xy-node-boxshadow-hover: 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --xy-node-boxshadow-selected: 0 0 0 2px rgba(138, 180, 248, 0.35);
+
+  --xy-selection-background-color: rgba(138, 180, 248, 0.08);
+  --xy-selection-border: 1px solid rgba(138, 180, 248, 0.45);
+
+  --xy-handle-background-color: #8ab4f8;
+  --xy-handle-border-color: #131314;
+
+  --xy-edge-stroke: #5f6368;
+  --xy-edge-stroke-selected: #8ab4f8;
+  --xy-connectionline-stroke: #8ab4f8;
+
+  --xy-controls-button-background-color: #131314;
+  --xy-controls-button-background-color-hover: rgba(255, 255, 255, 0.06);
+  --xy-controls-button-border-color: #2e2f33;
+  --xy-controls-button-color: #9aa0a6;
+  --xy-controls-button-color-hover: #e8eaed;
+  --xy-controls-box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+
+  --xy-minimap-background-color: #131314;
+  --xy-minimap-mask-background-color: rgba(19, 19, 20, 0.75);
+  --xy-minimap-mask-stroke-color: #8ab4f8;
+  --xy-minimap-node-background-color: #2e2f33;
+  --xy-minimap-node-stroke-color: #5f6368;
+
+  --xy-resize-background-color: #8ab4f8;
+}
+
+/* ── Indeterminate top-of-panel loading sweep ──────────────────── */
+@keyframes loading-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+.loading-sweep-bar {
+  animation: loading-sweep 1.1s ease-in-out infinite;
+}
+
+/* ── Markdown note editor (Tiptap) ──────────────────────────────── */
+.prose-note .ProseMirror {
+  outline: none;
+  min-height: 100%;
+}
+.prose-note h1 {
+  font-size: 1.3em;
+  font-weight: 600;
+  margin: 0.4em 0 0.2em;
+}
+.prose-note h2 {
+  font-size: 1.1em;
+  font-weight: 600;
+  margin: 0.4em 0 0.2em;
+}
+.prose-note p {
+  margin: 0.25em 0;
+  line-height: 1.5;
+}
+.prose-note ul,
+.prose-note ol {
+  padding-left: 1.25em;
+  margin: 0.25em 0;
+}
+.prose-note li {
+  margin: 0.15em 0;
+}
+.prose-note mark {
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.prose-note .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: #5f6368;
+}

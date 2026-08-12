@@ -1,10 +1,9 @@
-import { and, asc, count, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-orm";
-import { db, entries, sections } from "@/lib/db";
+import { and, asc, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-orm";
+import { db, entries, type TaskStatus } from "@/lib/db";
 import { addDaysIST, todayIST } from "@/lib/date";
-import { isFillerSummary, type Category, type Project } from "@/lib/constants";
+import { isFillerSummary, type WorkType } from "@/lib/constants";
 
 export type EntryRow = typeof entries.$inferSelect;
-export type SectionRow = typeof sections.$inferSelect;
 
 /**
  * Everything the board's list view needs to render a row — deliberately
@@ -16,7 +15,7 @@ export type SectionRow = typeof sections.$inferSelect;
  */
 export type EntryListItem = Pick<
   EntryRow,
-  "id" | "title" | "sectionId" | "date" | "createdAt" | "updatedAt"
+  "id" | "title" | "status" | "workType" | "dueDate" | "date" | "createdAt" | "updatedAt" | "authorId"
 >;
 
 const SUMMARY_PREVIEW_LENGTH = 200;
@@ -24,168 +23,19 @@ const DASHBOARD_WINDOW_DAYS = 30;
 
 export class WorklogError extends Error {}
 
-/** Get every section that has ever been created, across all dates. */
-export async function getSections(): Promise<SectionRow[]> {
-  return db
-    .select()
-    .from(sections)
-    .orderBy(asc(sections.order), asc(sections.createdAt));
-}
-
-/** Get sections scoped to one specific date only — never leaks another date's rows. */
-export async function getSectionsForDate(date: string): Promise<SectionRow[]> {
-  return db
-    .select()
-    .from(sections)
-    .where(eq(sections.date, date))
-    .orderBy(asc(sections.order), asc(sections.createdAt));
-}
-
-/**
- * Create a section, scoped to a date. Dedupes on (name, date) — the same name
- * on two different dates is two distinct rows, never the same shared row.
- * `date` always defaults to today: sections are never dateless/global going forward.
- */
-export async function createSection(name: string, date?: string): Promise<SectionRow> {
-  const trimmed = name.trim();
-  if (!trimmed) {
-    throw new WorklogError("Section name cannot be empty.");
-  }
-  const targetDate = date?.trim() || todayIST();
-
-  const existing = await db
-    .select()
-    .from(sections)
-    .where(and(eq(sections.name, trimmed), eq(sections.date, targetDate)))
-    .limit(1);
-
-  if (existing.length > 0) {
-    return existing[0];
-  }
-
-  const dateSections = await db
-    .select()
-    .from(sections)
-    .where(eq(sections.date, targetDate));
-  const maxOrder = dateSections.reduce((max, s) => Math.max(max, s.order), 0);
-
-  const [created] = await db
-    .insert(sections)
-    .values({
-      name: trimmed,
-      date: targetDate,
-      order: maxOrder + 1,
-    })
-    .returning();
-
-  return created;
-}
-
-/** Update section title by id or current name */
-export async function updateSection(
-  idOrName: string,
-  newName: string,
-): Promise<SectionRow> {
-  const trimmedNewName = newName.trim();
-  if (!trimmedNewName) {
-    throw new WorklogError("New section title cannot be empty.");
-  }
-
-  const isUuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      idOrName.trim(),
-    );
-
-  let existing: SectionRow | undefined;
-
-  if (isUuid) {
-    const [row] = await db
-      .select()
-      .from(sections)
-      .where(eq(sections.id, idOrName.trim()))
-      .limit(1);
-    existing = row;
-  }
-
-  if (!existing) {
-    const [row] = await db
-      .select()
-      .from(sections)
-      .where(eq(sections.name, idOrName.trim()))
-      .limit(1);
-    existing = row;
-  }
-
-  if (!existing) {
-    throw new WorklogError(`Section not found: ${idOrName}`);
-  }
-
-  const [updated] = await db
-    .update(sections)
-    .set({
-      name: trimmedNewName,
-      updatedAt: sql`now()`,
-    })
-    .where(eq(sections.id, existing.id))
-    .returning();
-
-  return updated;
-}
-
-/** Move a log entry to a different section column */
-export async function moveEntryToSection(
-  id: string,
-  targetSection: string,
+/** Create a new independent log entry row (no merging, no upsert). Lands in "todo"/"task" unless given. */
+export async function createOrAppendEntry(
+  organizationId: string,
+  authorId: string,
+  input: {
+    title?: string;
+    summary: string;
+    status?: TaskStatus;
+    workType?: WorkType;
+    dueDate?: string;
+    date?: string;
+  },
 ): Promise<EntryRow> {
-  const trimmed = targetSection.trim();
-  let targetSec: SectionRow | undefined;
-
-  const isUuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      trimmed,
-    );
-
-  if (isUuid) {
-    const [row] = await db
-      .select()
-      .from(sections)
-      .where(eq(sections.id, trimmed))
-      .limit(1);
-    if (!row) {
-      throw new WorklogError(`Section not found: ${trimmed}`);
-    }
-    targetSec = row;
-  } else {
-    // Not a UUID — treat it as a section name to create/find (only reachable
-    // from callers that pass a name directly, e.g. MCP tools; the board's
-    // drag-and-drop always passes a real section id).
-    targetSec = await createSection(trimmed);
-  }
-
-  const [updated] = await db
-    .update(entries)
-    .set({
-      sectionId: targetSec.id,
-      updatedAt: sql`now()`,
-    })
-    .where(and(eq(entries.id, id), isNull(entries.deletedAt)))
-    .returning();
-
-  if (!updated) {
-    throw new WorklogError(`Entry not found: ${id}`);
-  }
-
-  return updated;
-}
-
-/** Create a new independent log entry row (no merging, no upsert). */
-export async function createOrAppendEntry(input: {
-  title?: string;
-  summary: string;
-  sectionId?: string;
-  sectionName?: string;
-  date?: string;
-}): Promise<EntryRow> {
   if (isFillerSummary(input.summary)) {
     throw new WorklogError(
       "Summary is too short or too generic. Be specific about what was done.",
@@ -193,31 +43,6 @@ export async function createOrAppendEntry(input: {
   }
 
   const entryDate = input.date ?? todayIST();
-  let secRow: SectionRow | undefined;
-
-  if (input.sectionId) {
-    const trimmedId = input.sectionId.trim();
-    const isUuid =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        trimmedId,
-      );
-    if (!isUuid) {
-      throw new WorklogError(`Invalid section id: ${trimmedId}`);
-    }
-    const [found] = await db
-      .select()
-      .from(sections)
-      .where(eq(sections.id, trimmedId))
-      .limit(1);
-    if (!found) {
-      throw new WorklogError(`Section not found: ${trimmedId}`);
-    }
-    secRow = found;
-  } else {
-    const sName = input.sectionName?.trim() || "My Tasks";
-    secRow = await createSection(sName, entryDate);
-  }
-
   const titleVal = input.title?.trim() || input.summary.split("\n")[0].slice(0, 80);
 
   const [row] = await db
@@ -226,14 +51,18 @@ export async function createOrAppendEntry(input: {
       date: entryDate,
       title: titleVal,
       summary: input.summary.trim(),
-      sectionId: secRow.id,
+      status: input.status ?? "todo",
+      workType: input.workType ?? "task",
+      dueDate: input.dueDate,
+      organizationId,
+      authorId,
     })
     .returning();
 
   return row;
 }
 
-export async function getTodayEntries(): Promise<{
+export async function getTodayEntries(organizationId: string): Promise<{
   date: string;
   rows: EntryRow[];
 }> {
@@ -241,31 +70,46 @@ export async function getTodayEntries(): Promise<{
   const rows = await db
     .select()
     .from(entries)
-    .where(and(eq(entries.date, date), isNull(entries.deletedAt)))
+    .where(
+      and(
+        eq(entries.organizationId, organizationId),
+        eq(entries.date, date),
+        isNull(entries.deletedAt),
+      ),
+    )
     .orderBy(desc(entries.createdAt));
 
   return { date, rows };
 }
 
 /** Rows for the dashboard's default view — last 30 days, most recent first. */
-export async function getRecentEntries(): Promise<EntryRow[]> {
+export async function getRecentEntries(organizationId: string): Promise<EntryRow[]> {
   const cutoff = addDaysIST(todayIST(), -DASHBOARD_WINDOW_DAYS);
 
   return db
     .select()
     .from(entries)
-    .where(and(isNull(entries.deletedAt), gte(entries.date, cutoff)))
+    .where(
+      and(
+        eq(entries.organizationId, organizationId),
+        isNull(entries.deletedAt),
+        gte(entries.date, cutoff),
+      ),
+    )
     .orderBy(desc(entries.updatedAt), desc(entries.date));
 }
 
 /** Paginated entries for server-side dashboard table view (latest first). */
-export async function getPaginatedEntries(options?: {
-  page?: number;
-  pageSize?: number;
-  search?: string;
-  filterToday?: boolean;
-  date?: string;
-}): Promise<{
+export async function getPaginatedEntries(
+  organizationId: string,
+  options?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    filterToday?: boolean;
+    date?: string;
+  },
+): Promise<{
   entries: EntryRow[];
   totalCount: number;
   totalPages: number;
@@ -276,7 +120,7 @@ export async function getPaginatedEntries(options?: {
   const pageSize = Math.max(1, Math.min(100, options?.pageSize ?? 10));
   const offset = (page - 1) * pageSize;
 
-  const conditions = [isNull(entries.deletedAt)];
+  const conditions = [eq(entries.organizationId, organizationId), isNull(entries.deletedAt)];
 
   if (options?.filterToday) {
     conditions.push(eq(entries.date, todayIST()));
@@ -326,16 +170,19 @@ export async function getPaginatedEntries(options?: {
   };
 }
 
-export async function searchEntries(input: {
-  from?: string;
-  to?: string;
-  limit?: number;
-  offset?: number;
-}): Promise<{ rows: EntryRow[]; limit: number; offset: number }> {
+export async function searchEntries(
+  organizationId: string,
+  input: {
+    from?: string;
+    to?: string;
+    limit?: number;
+    offset?: number;
+  },
+): Promise<{ rows: EntryRow[]; limit: number; offset: number }> {
   const limit = Math.min(input.limit ?? 20, 100);
   const offset = input.offset ?? 0;
 
-  const conditions = [isNull(entries.deletedAt)];
+  const conditions = [eq(entries.organizationId, organizationId), isNull(entries.deletedAt)];
   if (input.from) conditions.push(gte(entries.date, input.from));
   if (input.to) conditions.push(lte(entries.date, input.to));
 
@@ -358,18 +205,26 @@ export function previewSummary(summary: string): string {
 }
 
 export async function softDeleteEntry(
+  organizationId: string,
   id: string,
 ): Promise<EntryRow | undefined> {
   const [row] = await db
     .update(entries)
     .set({ deletedAt: sql`now()` })
-    .where(and(eq(entries.id, id), isNull(entries.deletedAt)))
+    .where(
+      and(
+        eq(entries.id, id),
+        eq(entries.organizationId, organizationId),
+        isNull(entries.deletedAt),
+      ),
+    )
     .returning();
 
   return row;
 }
 
 export async function updateEntry(
+  organizationId: string,
   id: string,
   patch: {
     title?: string;
@@ -389,7 +244,13 @@ export async function updateEntry(
       ...(patch.summary !== undefined && { summary: patch.summary.trim() }),
       updatedAt: sql`now()`,
     })
-    .where(and(eq(entries.id, id), isNull(entries.deletedAt)))
+    .where(
+      and(
+        eq(entries.id, id),
+        eq(entries.organizationId, organizationId),
+        isNull(entries.deletedAt),
+      ),
+    )
     .returning();
 
   if (!row) {
@@ -399,27 +260,51 @@ export async function updateEntry(
   return row;
 }
 
-export type SectionWithEntries = SectionRow & {
+/** Moves a task between the board's fixed status columns. */
+export async function updateEntryStatus(
+  organizationId: string,
+  id: string,
+  status: TaskStatus,
+): Promise<EntryRow> {
+  const [row] = await db
+    .update(entries)
+    .set({ status, updatedAt: sql`now()` })
+    .where(
+      and(
+        eq(entries.id, id),
+        eq(entries.organizationId, organizationId),
+        isNull(entries.deletedAt),
+      ),
+    )
+    .returning();
+
+  if (!row) {
+    throw new WorklogError(`Entry not found: ${id}`);
+  }
+
+  return row;
+}
+
+export type BoardColumn = {
+  status: TaskStatus;
   entries: EntryListItem[];
 };
 
-/**
- * Board for exactly one date. Sections are fetched strictly by their own
- * `date` column — never by name, never a global list — so a section shown
- * here is always physically scoped to this date. No section is ever
- * auto-created here; a date with none simply returns an empty list.
- */
-export async function getBoardData(options: {
-  date: string;
-  search?: string;
-}): Promise<{
-  sections: SectionWithEntries[];
-}> {
+/** Board for exactly one workspace + date, always exactly the three fixed status columns. */
+export async function getBoardData(
+  organizationId: string,
+  options: {
+    date: string;
+    search?: string;
+  },
+): Promise<{ columns: BoardColumn[] }> {
   const targetDate = options.date.trim();
 
-  const dateSections = await getSectionsForDate(targetDate);
-
-  const conditions = [isNull(entries.deletedAt), eq(entries.date, targetDate)];
+  const conditions = [
+    eq(entries.organizationId, organizationId),
+    isNull(entries.deletedAt),
+    eq(entries.date, targetDate),
+  ];
   if (options.search && options.search.trim() !== "") {
     // Filtering still matches against the full summary text even though it's
     // not part of the selected columns below — Postgres can reference a
@@ -434,8 +319,11 @@ export async function getBoardData(options: {
     .select({
       id: entries.id,
       title: entries.title,
-      sectionId: entries.sectionId,
+      status: entries.status,
+      workType: entries.workType,
+      dueDate: entries.dueDate,
       date: entries.date,
+      authorId: entries.authorId,
       createdAt: entries.createdAt,
       updatedAt: entries.updatedAt,
     })
@@ -443,60 +331,41 @@ export async function getBoardData(options: {
     .where(and(...conditions))
     .orderBy(asc(entries.createdAt));
 
-  const sectionMap = new Map<string, EntryListItem[]>();
-  dateSections.forEach((s) => sectionMap.set(s.id, []));
+  const byStatus = new Map<TaskStatus, EntryListItem[]>([
+    ["todo", []],
+    ["in_progress", []],
+    ["completed", []],
+  ]);
 
   dateEntries.forEach((entry) => {
-    if (entry.sectionId && sectionMap.has(entry.sectionId)) {
-      sectionMap.get(entry.sectionId)!.push(entry);
-    }
+    byStatus.get(entry.status)?.push(entry);
   });
 
-  const resultSections: SectionWithEntries[] = dateSections.map((s) => ({
-    ...s,
-    entries: sectionMap.get(s.id) || [],
-  }));
-
-  return { sections: resultSections };
+  return {
+    columns: [
+      { status: "todo", entries: byStatus.get("todo")! },
+      { status: "in_progress", entries: byStatus.get("in_progress")! },
+      { status: "completed", entries: byStatus.get("completed")! },
+    ],
+  };
 }
 
-/** Full row (summary included) for the detail dialog — fetched lazily by id, never bulk. */
-export async function getEntryById(id: string): Promise<EntryRow | undefined> {
+/** Full row (summary included) for the detail dialog — fetched lazily by id, scoped to this workspace. */
+export async function getEntryById(
+  organizationId: string,
+  id: string,
+): Promise<EntryRow | undefined> {
   const [row] = await db
     .select()
     .from(entries)
-    .where(and(eq(entries.id, id), isNull(entries.deletedAt)))
+    .where(
+      and(
+        eq(entries.id, id),
+        eq(entries.organizationId, organizationId),
+        isNull(entries.deletedAt),
+      ),
+    )
     .limit(1);
 
   return row;
 }
-
-/** Delete a section — refuses if it still has any active (non-deleted) entries. */
-export async function deleteSection(id: string): Promise<void> {
-  const [row] = await db
-    .select({ value: count() })
-    .from(entries)
-    .where(and(eq(entries.sectionId, id), isNull(entries.deletedAt)));
-
-  if (Number(row?.value ?? 0) > 0) {
-    throw new WorklogError("Section is not empty — move or remove its logs first.");
-  }
-
-  const deleted = await db.delete(sections).where(eq(sections.id, id)).returning();
-
-  if (deleted.length === 0) {
-    throw new WorklogError(`Section not found: ${id}`);
-  }
-}
-
-export async function updateSectionOrder(
-  orders: { id: string; order: number }[],
-): Promise<void> {
-  for (const item of orders) {
-    await db
-      .update(sections)
-      .set({ order: item.order, updatedAt: sql`now()` })
-      .where(eq(sections.id, item.id));
-  }
-}
-

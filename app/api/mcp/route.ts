@@ -1,144 +1,48 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { z } from "zod";
-import { verifyApiKey } from "@/lib/auth";
-import { todayIST } from "@/lib/date";
+import { verifyApiKey, type ApiKeyIdentity } from "@/lib/auth";
+import { canWriteEntries } from "@/lib/permissions";
+import { WORK_TYPES, type WorkType } from "@/lib/constants";
 import {
   createOrAppendEntry,
-  createSection,
-  deleteSection,
-  getSectionsForDate,
   getTodayEntries,
   previewSummary,
   searchEntries,
   softDeleteEntry,
   updateEntry,
-  updateSection,
+  updateEntryStatus,
 } from "@/lib/worklog";
+
+const TASK_STATUS_VALUES = ["todo", "in_progress", "completed"] as const;
+const WORK_TYPE_VALUES = WORK_TYPES.map((t) => t.value) as [WorkType, ...WorkType[]];
+
+type ToolExtra = { authInfo?: { extra?: Record<string, unknown> } };
+
+function identityFrom(extra: ToolExtra): ApiKeyIdentity {
+  const identity = extra.authInfo?.extra as ApiKeyIdentity | undefined;
+  if (!identity) {
+    throw new Error("Missing authenticated identity for this MCP request.");
+  }
+  return identity;
+}
+
+function requireWriteAccess(identity: ApiKeyIdentity) {
+  if (!canWriteEntries(identity.role)) {
+    throw new Error(
+      "This API key has view-only access on its workspace — ask a workspace owner/admin for a write-capable key.",
+    );
+  }
+}
 
 const handler = createMcpHandler(
   (server) => {
-    server.registerTool(
-      "get_sections",
-      {
-        title: "Get worklog sections/lists for a date",
-        description:
-          "Returns the sections that exist for one date (defaults to today, IST). " +
-          "Sections are unique per date — the same name on two different dates is two separate sections.",
-        inputSchema: {
-          date: z
-            .string()
-            .regex(/^\d{4}-\d{2}-\d{2}$/)
-            .optional()
-            .describe("YYYY-MM-DD, defaults to today in IST"),
-        },
-      },
-      async ({ date }) => {
-        const targetDate = date || todayIST();
-        const sectionsList = await getSectionsForDate(targetDate);
-        if (sectionsList.length === 0) {
-          return {
-            content: [
-              { type: "text", text: `No sections exist yet for ${targetDate}.` },
-            ],
-          };
-        }
-        const textList = sectionsList
-          .map((s) => `- [id: ${s.id}] '${s.name}'`)
-          .join("\n");
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Sections for ${targetDate} (${sectionsList.length}):\n${textList}`,
-            },
-          ],
-        };
-      },
-    );
-
-    server.registerTool(
-      "create_section",
-      {
-        title: "Create a worklog section",
-        description:
-          "Creates a new section (list column) in DayLog for one date (defaults to today, IST). " +
-          "Sections are always scoped to a date — the same name on a different date creates a distinct section.",
-        inputSchema: {
-          name: z
-            .string()
-            .describe("Name/title of the section e.g. My Tasks, Sprint Notes"),
-          date: z
-            .string()
-            .regex(/^\d{4}-\d{2}-\d{2}$/)
-            .optional()
-            .describe("YYYY-MM-DD, defaults to today in IST"),
-        },
-      },
-      async ({ name, date }) => {
-        const sec = await createSection(name, date || todayIST());
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Section '${sec.name}' [id: ${sec.id}] created for ${sec.date}.`,
-            },
-          ],
-        };
-      },
-    );
-
-    server.registerTool(
-      "update_section",
-      {
-        title: "Update section title",
-        description: "Renames/updates a section title using section id or section name.",
-        inputSchema: {
-          id: z.string().describe("Section id or current section name"),
-          name: z.string().describe("New title for the section"),
-        },
-      },
-      async ({ id, name }) => {
-        const sec = await updateSection(id, name);
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Section updated to '${sec.name}' [id: ${sec.id}].`,
-            },
-          ],
-        };
-      },
-    );
-
-    server.registerTool(
-      "delete_section",
-      {
-        title: "Delete a worklog section",
-        description:
-          "Deletes a section by id. Refuses if the section still has any active (non-deleted) entries — " +
-          "delete or move those entries first.",
-        inputSchema: {
-          id: z.string().describe("Section id to delete"),
-        },
-      },
-      async ({ id }) => {
-        await deleteSection(id);
-        return {
-          content: [
-            { type: "text", text: `Section [id: ${id}] deleted.` },
-          ],
-        };
-      },
-    );
-
     server.registerTool(
       "create_or_append_entry",
       {
         title: "Log work entry",
         description:
-          "Create a worklog entry on a given date (defaults to today in IST). " +
-          "If section is omitted, automatically creates/uses the default section for today ('My Tasks'). " +
-          "Can also log directly into a specific section by sectionId or section name.",
+          "Creates a worklog entry on a given date (defaults to today in IST). " +
+          "Lands in the 'todo' column of the board unless a status is given.",
         inputSchema: {
           title: z.string().optional().describe("Title of the log entry"),
           summary: z
@@ -146,14 +50,19 @@ const handler = createMcpHandler(
             .describe(
               "Specific description/details of work done. Generic filler like 'worked on stuff' is rejected.",
             ),
-          sectionId: z
-            .string()
+          status: z
+            .enum(TASK_STATUS_VALUES)
             .optional()
-            .describe("Optional section ID to log into"),
-          section: z
-            .string()
+            .describe("Board column to log into: todo, in_progress, or completed. Defaults to todo."),
+          workType: z
+            .enum(WORK_TYPE_VALUES)
             .optional()
-            .describe("Optional section name where task should be added (defaults to 'My Tasks')"),
+            .describe(`Work type: ${WORK_TYPE_VALUES.join(", ")}. Defaults to task.`),
+          dueDate: z
+            .string()
+            .regex(/^\d{4}-\d{2}-\d{2}$/)
+            .optional()
+            .describe("YYYY-MM-DD due date, optional"),
           date: z
             .string()
             .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -161,19 +70,22 @@ const handler = createMcpHandler(
             .describe("YYYY-MM-DD, defaults to today in IST"),
         },
       },
-      async ({ title, summary, sectionId, section, date }) => {
-        const row = await createOrAppendEntry({
+      async ({ title, summary, status, workType, dueDate, date }, extra) => {
+        const identity = identityFrom(extra);
+        requireWriteAccess(identity);
+        const row = await createOrAppendEntry(identity.organizationId, identity.userId, {
           title,
           summary,
-          sectionId,
-          sectionName: section,
+          status,
+          workType,
+          dueDate,
           date,
         });
         return {
           content: [
             {
               type: "text",
-              text: `Logged [id: ${row.id}] in section [sectionId: ${row.sectionId}] on ${row.date}.`,
+              text: `Logged [id: ${row.id}] as '${row.workType}' in '${row.status}' on ${row.date}.`,
             },
           ],
         };
@@ -184,15 +96,17 @@ const handler = createMcpHandler(
       "update_entry",
       {
         title: "Update worklog entry",
-        description: "Updates details or title of an existing log entry by entry id.",
+        description: "Updates the title or summary of an existing log entry by entry id.",
         inputSchema: {
           id: z.string().describe("Entry UUID"),
           title: z.string().optional().describe("Updated log title"),
           summary: z.string().optional().describe("Updated log summary/details"),
         },
       },
-      async ({ id, title, summary }) => {
-        const updated = await updateEntry(id, {
+      async ({ id, title, summary }, extra) => {
+        const identity = identityFrom(extra);
+        requireWriteAccess(identity);
+        const updated = await updateEntry(identity.organizationId, id, {
           title,
           summary,
         });
@@ -208,15 +122,37 @@ const handler = createMcpHandler(
     );
 
     server.registerTool(
+      "move_entry",
+      {
+        title: "Move worklog entry to another status",
+        description: "Moves a task between the board's fixed columns: todo, in_progress, completed.",
+        inputSchema: {
+          id: z.string().describe("Entry UUID"),
+          status: z.enum(TASK_STATUS_VALUES).describe("Target column: todo, in_progress, or completed"),
+        },
+      },
+      async ({ id, status }, extra) => {
+        const identity = identityFrom(extra);
+        requireWriteAccess(identity);
+        const updated = await updateEntryStatus(identity.organizationId, id, status);
+        return {
+          content: [
+            { type: "text", text: `Moved entry [id: ${updated.id}] to '${updated.status}'.` },
+          ],
+        };
+      },
+    );
+
+    server.registerTool(
       "get_today",
       {
         title: "Get today's worklog",
-        description:
-          "Returns all worklog entries for today (IST).",
+        description: "Returns all worklog entries for today (IST).",
         inputSchema: {},
       },
-      async () => {
-        const { date, rows } = await getTodayEntries();
+      async (extra) => {
+        const identity = identityFrom(extra);
+        const { date, rows } = await getTodayEntries(identity.organizationId);
 
         if (rows.length === 0) {
           return {
@@ -229,7 +165,7 @@ const handler = createMcpHandler(
         const text = rows
           .map(
             (row) =>
-              `[id: ${row.id}] ${row.title ? `${row.title} - ` : ""}${row.summary}`,
+              `[id: ${row.id}] (${row.status}) ${row.title ? `${row.title} - ` : ""}${row.summary}`,
           )
           .join("\n\n");
 
@@ -248,8 +184,7 @@ const handler = createMcpHandler(
       "search_entries",
       {
         title: "Search worklog entries",
-        description:
-          "Search worklog entries by date range. Always paginated.",
+        description: "Search worklog entries by date range. Always paginated.",
         inputSchema: {
           from: z
             .string()
@@ -263,8 +198,9 @@ const handler = createMcpHandler(
           offset: z.number().int().min(0).default(0),
         },
       },
-      async ({ from, to, limit, offset }) => {
-        const { rows } = await searchEntries({
+      async ({ from, to, limit, offset }, extra) => {
+        const identity = identityFrom(extra);
+        const { rows } = await searchEntries(identity.organizationId, {
           from,
           to,
           limit,
@@ -278,7 +214,7 @@ const handler = createMcpHandler(
         const text = rows
           .map(
             (row) =>
-              `[id: ${row.id}] ${row.date} — ${row.title ? `${row.title} - ` : ""}${previewSummary(row.summary)}`,
+              `[id: ${row.id}] ${row.date} (${row.status}) — ${row.title ? `${row.title} - ` : ""}${previewSummary(row.summary)}`,
           )
           .join("\n\n");
 
@@ -302,8 +238,10 @@ const handler = createMcpHandler(
           id: z.string().describe("Entry UUID to delete"),
         },
       },
-      async ({ id }) => {
-        const row = await softDeleteEntry(id);
+      async ({ id }, extra) => {
+        const identity = identityFrom(extra);
+        requireWriteAccess(identity);
+        const row = await softDeleteEntry(identity.organizationId, id);
 
         if (!row) {
           return {
