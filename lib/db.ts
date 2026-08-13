@@ -52,25 +52,6 @@ export const entries = pgTable(
   ],
 );
 
-export const apiKeys = pgTable(
-  "api_keys",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    name: text("name").notNull().default("Default key"),
-    keyHash: text("key_hash").notNull().unique(),
-    lastUsedAt: timestamp("last_used_at"),
-    revokedAt: timestamp("revoked_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-  },
-  (table) => [index("api_keys_user_id_org_id_idx").on(table.userId, table.organizationId)],
-);
-
 export type WidgetLayoutItem = {
   id: string;
   type: string;
@@ -154,7 +135,6 @@ const sql = neon(process.env.DATABASE_URL || "postgres://placeholder:placeholder
 export const db = drizzle(sql, {
   schema: {
     entries,
-    apiKeys,
     widgetLayouts,
     docProjects,
     docPages,
