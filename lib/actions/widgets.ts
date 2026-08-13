@@ -11,7 +11,9 @@ const layoutItemSchema = z.object({
   x: z.number(),
   y: z.number(),
   width: z.number().min(80),
-  height: z.number().min(80),
+  // Optional — a markdown note omits this until manually resized, sizing to
+  // its content in the meantime.
+  height: z.number().min(80).optional(),
   data: z.record(z.string(), z.unknown()).optional(),
 });
 

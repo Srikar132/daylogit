@@ -6,12 +6,19 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
 import { Highlight } from "@tiptap/extension-highlight";
 import { Placeholder } from "@tiptap/extension-placeholder";
+import { Table } from "@tiptap/extension-table";
+import { TableRow } from "@tiptap/extension-table-row";
+import { TableHeader } from "@tiptap/extension-table-header";
+import { TableCell } from "@tiptap/extension-table-cell";
+import { TaskList } from "@tiptap/extension-task-list";
+import { TaskItem } from "@tiptap/extension-task-item";
 import {
   Bold,
   Italic,
   Strikethrough,
   List,
   ListOrdered,
+  ListChecks,
   Heading1,
   Heading2,
   Trash2,
@@ -59,10 +66,19 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
       Highlight.configure({ multicolor: true }),
       FontSize,
       Placeholder.configure({ placeholder: "Write something…" }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      TaskList,
+      TaskItem.configure({ nested: true }),
     ],
     content: initialContent ?? "",
     editable: entered && canWrite,
     immediatelyRender: false,
+    editorProps: {
+      attributes: { spellcheck: "false" },
+    },
     onUpdate: ({ editor }) => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
@@ -116,6 +132,12 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
             active={editor.isActive("orderedList")}
           >
             <ListOrdered className="h-3.5 w-3.5" />
+          </ToolbarButton>
+          <ToolbarButton
+            onClick={() => editor.chain().focus().toggleTaskList().run()}
+            active={editor.isActive("taskList")}
+          >
+            <ListChecks className="h-3.5 w-3.5" />
           </ToolbarButton>
 
           <div className="mx-0.5 h-4 w-px bg-white/[0.08]" />

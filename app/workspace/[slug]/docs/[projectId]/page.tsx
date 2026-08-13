@@ -1,20 +1,18 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import { auth } from "@/lib/better-auth";
-import { WorklogDashboard } from "@/components/worklog-dashboard";
-import { getBoardData } from "@/lib/worklog";
-import { todayIST } from "@/lib/date";
 import { requireViewerContext } from "@/lib/workspace";
-import { getMyWidgetLayout } from "@/lib/actions/widgets";
+import { getDocProject, getDocPages } from "@/lib/actions/docs";
+import { DocsProjectView } from "@/components/docs/docs-project-view";
 
 export const dynamic = "force-dynamic";
 
-interface WorkspacePageProps {
-  params: Promise<{ slug: string }>;
+interface DocsProjectPageProps {
+  params: Promise<{ slug: string; projectId: string }>;
 }
 
-export default async function WorkspacePage({ params }: WorkspacePageProps) {
-  const { slug } = await params;
+export default async function DocsProjectPage({ params }: DocsProjectPageProps) {
+  const { slug, projectId } = await params;
   const reqHeaders = await headers();
 
   const session = await auth.api.getSession({ headers: reqHeaders });
@@ -25,8 +23,6 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
   const organizations = await auth.api.listOrganizations({ headers: reqHeaders });
   const org = organizations.find((o) => o.slug === slug);
   if (!org) {
-    // Either it doesn't exist or this user isn't a member — either way,
-    // back to the list rather than a dead end.
     redirect("/workspaces");
   }
 
@@ -38,15 +34,21 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
   }
 
   const viewer = await requireViewerContext();
-  const { columns } = await getBoardData(viewer.organizationId, { date: todayIST() });
-  const initialLayout = await getMyWidgetLayout();
+  // getDocProject scopes by viewer.organizationId — a project id from
+  // another workspace 404s here rather than leaking its existence.
+  const project = await getDocProject(projectId);
+  if (!project) {
+    notFound();
+  }
+
+  const pages = await getDocPages(projectId);
 
   return (
-    <WorklogDashboard
+    <DocsProjectView
       slug={slug}
-      columns={columns}
+      project={project}
+      initialPages={pages}
       canWrite={viewer.role !== "member"}
-      initialLayout={initialLayout}
     />
   );
 }

@@ -337,12 +337,29 @@
 .prose-note h1 {
   font-size: 1.3em;
   font-weight: 600;
-  margin: 0.4em 0 0.2em;
+  margin: 0.6em 0 0.2em;
 }
 .prose-note h2 {
-  font-size: 1.1em;
+  font-size: 1.15em;
   font-weight: 600;
-  margin: 0.4em 0 0.2em;
+  margin: 0.55em 0 0.2em;
+}
+.prose-note h3 {
+  font-size: 1.05em;
+  font-weight: 600;
+  margin: 0.5em 0 0.2em;
+}
+.prose-note h4,
+.prose-note h5,
+.prose-note h6 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0.45em 0 0.2em;
+}
+.prose-note h1:first-child,
+.prose-note h2:first-child,
+.prose-note h3:first-child {
+  margin-top: 0;
 }
 .prose-note p {
   margin: 0.25em 0;
@@ -353,6 +370,18 @@
   padding-left: 1.25em;
   margin: 0.25em 0;
 }
+.prose-note ul {
+  list-style: disc;
+}
+.prose-note ol {
+  list-style: decimal;
+}
+.prose-note ul ul {
+  list-style: circle;
+}
+.prose-note ul ul ul {
+  list-style: square;
+}
 .prose-note li {
   margin: 0.15em 0;
 }
@@ -360,10 +389,292 @@
   border-radius: 3px;
   padding: 0 2px;
 }
+.prose-note blockquote {
+  margin: 0.4em 0;
+  padding-left: 0.8em;
+  border-left: 3px solid rgba(255, 255, 255, 0.2);
+  color: #9aa0a6;
+  font-style: italic;
+}
+.prose-note code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f28b82;
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+}
+/* Code blocks stay a consistent dark "terminal" panel regardless of the
+   surrounding theme — that's the clearest, most unambiguous "this is code"
+   signal, the same reason every editor/blog renders them this way rather
+   than a background that's just a slightly different shade of the page. */
+.prose-note pre,
+.prose-page pre {
+  margin: 0.6em 0;
+  padding: 0.85em 1em;
+  border-radius: 8px;
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow-x: auto;
+}
+.prose-note pre code,
+.prose-page pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.85em;
+  line-height: 1.55;
+  color: #e8eaed;
+}
+.prose-note hr {
+  margin: 0.8em 0;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.prose-note a {
+  color: #8ab4f8;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-note ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+.prose-note ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4em;
+}
+.prose-note ul[data-type="taskList"] li > label {
+  margin-top: 0.2em;
+  user-select: none;
+}
+.prose-note ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+.prose-note ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: #5f6368;
+  text-decoration: line-through;
+}
 .prose-note .is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
   color: #5f6368;
+}
+
+/* Docs page sheet — same structure as .prose-note, inverted for a light
+   document page (the "Adobe PDF view" / notepad look) instead of the dark
+   canvas. */
+.prose-page .ProseMirror {
+  outline: none;
+  min-height: 100%;
+}
+.prose-page h1 {
+  font-size: 1.7em;
+  font-weight: 700;
+  margin: 0.7em 0 0.3em;
+}
+.prose-page h2 {
+  font-size: 1.35em;
+  font-weight: 600;
+  margin: 0.6em 0 0.25em;
+}
+.prose-page h3 {
+  font-size: 1.15em;
+  font-weight: 600;
+  margin: 0.55em 0 0.25em;
+}
+.prose-page h4,
+.prose-page h5,
+.prose-page h6 {
+  font-size: 1.05em;
+  font-weight: 600;
+  margin: 0.5em 0 0.2em;
+}
+.prose-page h1:first-child,
+.prose-page h2:first-child,
+.prose-page h3:first-child {
+  margin-top: 0;
+}
+.prose-page p {
+  margin: 0.4em 0;
+  line-height: 1.6;
+}
+.prose-page ul,
+.prose-page ol {
+  padding-left: 1.4em;
+  margin: 0.4em 0;
+}
+.prose-page ul {
+  list-style: disc;
+}
+.prose-page ol {
+  list-style: decimal;
+}
+.prose-page ul ul {
+  list-style: circle;
+}
+.prose-page ul ul ul {
+  list-style: square;
+}
+.prose-page li {
+  margin: 0.2em 0;
+}
+.prose-page mark {
+  border-radius: 3px;
+  padding: 0 2px;
+}
+.prose-page blockquote {
+  margin: 0.5em 0;
+  padding-left: 0.9em;
+  border-left: 3px solid rgba(0, 0, 0, 0.15);
+  color: #5f6368;
+  font-style: italic;
+}
+.prose-page code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: #c0392b;
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+}
+.prose-page hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+}
+.prose-page a {
+  color: #3b6fd4;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-page ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0;
+}
+.prose-page ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4em;
+}
+.prose-page ul[data-type="taskList"] li > label {
+  margin-top: 0.25em;
+  user-select: none;
+}
+.prose-page ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+.prose-page ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: #9aa0a6;
+  text-decoration: line-through;
+}
+.prose-page .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: #9aa0a6;
+}
+
+/* Tables — the extension provides behavior (resize, cell selection) but no
+   visual styling at all, so both prose-note (dark) and prose-page (light)
+   need their own colors for borders/header background. The wrapper carries
+   the outer rounded border + clips the table's square corners to match;
+   thick, solid (not faint-alpha) borders on every cell for a compact,
+   defined grid instead of the previous sparse hairline look. */
+.prose-note .tableWrapper,
+.prose-page .tableWrapper {
+  overflow-x: auto;
+  margin: 0.6em 0;
+  border-radius: 8px;
+}
+.prose-note .tableWrapper {
+  border: 2px solid rgba(255, 255, 255, 0.28);
+}
+.prose-page .tableWrapper {
+  border: 2px solid rgba(0, 0, 0, 0.3);
+}
+.prose-note table,
+.prose-page table {
+  /* Not relying on collapse's border-merging — separate + zero spacing
+     produces a clean touching grid unconditionally, no merge algorithm
+     involved, so there's no way for a gap to appear between rows. */
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0;
+}
+.prose-note td,
+.prose-note th,
+.prose-page td,
+.prose-page th {
+  min-width: 1em;
+  padding: 5px 9px;
+  line-height: 1.35;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+}
+/* Every cell owns its right + bottom edge; the wrapper's own border (below)
+   supplies the top + left outer edge, and the last row/column drop their
+   own right/bottom so it doesn't double up with the wrapper's edge there. */
+.prose-note td,
+.prose-note th {
+  border-right: 2px solid rgba(255, 255, 255, 0.28);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.28);
+}
+.prose-page td,
+.prose-page th {
+  border-right: 2px solid rgba(0, 0, 0, 0.3);
+  border-bottom: 2px solid rgba(0, 0, 0, 0.3);
+}
+.prose-note table tr td:last-child,
+.prose-note table tr th:last-child,
+.prose-page table tr td:last-child,
+.prose-page table tr th:last-child {
+  border-right: none;
+}
+.prose-note table tr:last-child td,
+.prose-note table tr:last-child th,
+.prose-page table tr:last-child td,
+.prose-page table tr:last-child th {
+  border-bottom: none;
+}
+.prose-note th {
+  font-weight: 600;
+  text-align: left;
+  background-color: rgba(255, 255, 255, 0.09);
+}
+.prose-page th {
+  font-weight: 600;
+  text-align: left;
+  background-color: rgba(0, 0, 0, 0.06);
+}
+.prose-note .selectedCell:after,
+.prose-page .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  inset: 0;
+  background: rgba(138, 180, 248, 0.25);
+  pointer-events: none;
+}
+.prose-note .column-resize-handle,
+.prose-page .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background-color: #8ab4f8;
+  pointer-events: none;
+}
+.ProseMirror.resize-cursor {
+  cursor: col-resize;
 }
