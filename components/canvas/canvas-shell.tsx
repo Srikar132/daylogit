@@ -482,6 +482,11 @@ function CanvasInner({
             fitViewOptions={{ padding: 0.15 }}
             proOptions={{ hideAttribution: true }}
             className="bg-[#1e1f20]"
+            // Off-screen widgets stop mounting entirely — their own data
+            // fetching (useQuery, Tiptap init, etc.) doesn't fire until
+            // scrolled into view, so this scales down with widget count
+            // instead of fighting the fetching work already done.
+            onlyRenderVisibleElements
           >
             <Controls className="overflow-hidden !rounded-xl !border !border-white/[0.06]" showInteractive={false} />
             <MiniMap className="!rounded-xl !border !border-white/[0.06]" />

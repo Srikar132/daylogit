@@ -3,11 +3,11 @@
 import { NodeResizer, type NodeProps } from "@xyflow/react";
 import { motion } from "framer-motion";
 import { GripVertical } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { WidgetChromeProvider, type FloatingAction } from "@/components/canvas/widget-chrome-context";
 import { BoardWidget } from "@/components/canvas/board-widget";
 import { MailSummaryWidget } from "@/components/canvas/mail-summary-widget";
-import { MarkdownWidget } from "@/components/canvas/markdown-widget";
 import { MediaWidget } from "@/components/canvas/media-widget";
 import { ProjectDocWidget } from "@/components/canvas/project-doc-widget";
 import { WorkspaceSettingsWidget, type WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
@@ -15,6 +15,14 @@ import type { BoardColumn } from "@/lib/worklog";
 import type { DocProjectSummary } from "@/lib/actions/docs";
 import type { GmailStatus } from "@/lib/actions/gmail";
 import type { GmailMessageSummary } from "@/lib/gmail";
+
+// Tiptap + its extensions (table, task-list, etc.) is the heaviest single
+// widget dependency and, unlike board/mail-summary, genuinely optional —
+// not every canvas has a note on it. Split out rather than paying for it
+// on every canvas open regardless of whether a note widget exists.
+const MarkdownWidget = dynamic(() => import("@/components/canvas/markdown-widget").then((m) => m.MarkdownWidget), {
+  ssr: false,
+});
 
 export type WidgetNodeData = {
   title: string;

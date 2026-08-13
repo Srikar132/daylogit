@@ -2,8 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import dynamic from "next/dynamic";
 import { useState } from "react";
-import { CanvasShell } from "@/components/canvas/canvas-shell";
 import { CanvasChrome } from "@/components/canvas/canvas-chrome";
 import type { BoardColumn } from "@/lib/worklog";
 import type { WidgetLayoutItem } from "@/lib/db";
@@ -11,6 +11,16 @@ import type { DocProjectSummary } from "@/lib/actions/docs";
 import type { GmailStatus } from "@/lib/actions/gmail";
 import type { GmailMessageSummary } from "@/lib/gmail";
 import type { WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
+
+// react-flow + dnd-kit + every widget component (Tiptap included, via
+// widget-node.tsx's static imports) all hang off this one import — code-
+// splitting it keeps that whole bundle out of the initial route JS. No SSR:
+// react-flow measures the DOM on mount, so a server-rendered pass buys
+// nothing here anyway.
+const CanvasShell = dynamic(() => import("@/components/canvas/canvas-shell").then((m) => m.CanvasShell), {
+  ssr: false,
+  loading: () => <div className="h-full w-full bg-[#1e1f20]" />,
+});
 
 interface WorklogDashboardProps {
   slug: string;
