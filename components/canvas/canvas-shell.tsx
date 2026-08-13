@@ -33,9 +33,17 @@ import type { BoardColumn } from "@/lib/worklog";
 import type { DocProjectSummary } from "@/lib/actions/docs";
 import type { GmailStatus } from "@/lib/actions/gmail";
 import type { GmailMessageSummary } from "@/lib/gmail";
+import type { WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
 
 const MULTI_INSTANCE_WIDGET_TYPES = new Set(["markdown", "media", "project-doc"]);
-const KNOWN_WIDGET_TYPES = new Set(["board", "mail-summary", "markdown", "media", "project-doc"]);
+const KNOWN_WIDGET_TYPES = new Set([
+  "board",
+  "mail-summary",
+  "markdown",
+  "media",
+  "project-doc",
+  "workspace-settings",
+]);
 const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary"]);
 const MEDIA_MIME_PATTERN = /^(image|video)\//;
 
@@ -43,9 +51,12 @@ const MEDIA_MIME_PATTERN = /^(image|video)\//;
 // Completed" columns are visible without horizontal scroll on a typical
 // desktop viewport. Mail summary sits beside it — fully self-contained, it
 // fetches/manages its own data and takes no props from the canvas.
+// Workspace settings is pinned the same way — never addable/removable (see
+// widget-toolbar.tsx's ADDABLE_WIDGET_TYPES and mergeWithDefaults below).
 const DEFAULT_LAYOUT: WidgetLayoutItem[] = [
   { id: "board-1", type: "board", x: 40, y: 220, width: 1180, height: 660 },
   { id: "mail-summary-1", type: "mail-summary", x: 1260, y: 220, width: 340, height: 420 },
+  { id: "workspace-settings-1", type: "workspace-settings", x: 1260, y: 660, width: 360, height: 460 },
 ];
 
 // Height omitted for markdown — it sizes to its own content until the user
@@ -75,6 +86,7 @@ type WidgetNodeContext = {
   initialProjectSummaries: Record<string, DocProjectSummary>;
   initialGmailStatus: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
+  initialWorkspaceMembers?: WorkspaceMembersData;
 };
 
 function widgetTitle(type: string): string {
@@ -89,6 +101,8 @@ function widgetTitle(type: string): string {
       return "Media";
     case "project-doc":
       return "Project";
+    case "workspace-settings":
+      return "Workspace";
     default:
       return type;
   }
@@ -156,6 +170,7 @@ function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node {
     initialSummary: docProjectId ? ctx.initialProjectSummaries[docProjectId] : undefined,
     initialGmailStatus: item.type === "mail-summary" ? ctx.initialGmailStatus : undefined,
     initialGmailMessages: item.type === "mail-summary" ? ctx.initialGmailMessages : undefined,
+    initialWorkspaceMembers: item.type === "workspace-settings" ? ctx.initialWorkspaceMembers : undefined,
   };
 
   return {
@@ -179,6 +194,7 @@ interface CanvasShellProps {
   initialProjectSummaries: Record<string, DocProjectSummary>;
   initialGmailStatus: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
+  initialWorkspaceMembers?: WorkspaceMembersData;
 }
 
 function CanvasInner({
@@ -189,10 +205,27 @@ function CanvasInner({
   initialProjectSummaries,
   initialGmailStatus,
   initialGmailMessages,
+  initialWorkspaceMembers,
 }: CanvasShellProps) {
   const ctx: WidgetNodeContext = useMemo(
-    () => ({ columns, canWrite, slug, initialProjectSummaries, initialGmailStatus, initialGmailMessages }),
-    [columns, canWrite, slug, initialProjectSummaries, initialGmailStatus, initialGmailMessages],
+    () => ({
+      columns,
+      canWrite,
+      slug,
+      initialProjectSummaries,
+      initialGmailStatus,
+      initialGmailMessages,
+      initialWorkspaceMembers,
+    }),
+    [
+      columns,
+      canWrite,
+      slug,
+      initialProjectSummaries,
+      initialGmailStatus,
+      initialGmailMessages,
+      initialWorkspaceMembers,
+    ],
   );
 
   const [nodes, setNodes, onNodesChangeInternal] = useNodesState<Node>(
@@ -429,7 +462,12 @@ function CanvasInner({
   }
 
   return (
-    <DndContext sensors={dndSensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    // Explicit id — without one, dnd-kit falls back to a module-level
+    // incrementing counter for its aria-describedby ids, and this context
+    // being nested with BoardWidget's own DndContext (data-dependent task
+    // count) shifts that counter differently between the server render
+    // and the client hydration pass, causing a hydration mismatch warning.
+    <DndContext id="canvas-widget-toolbar" sensors={dndSensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <CanvasActionsProvider
         value={{ updateWidgetData, deleteWidget, getPendingFile, clearPendingFile, resizeWidget }}
       >

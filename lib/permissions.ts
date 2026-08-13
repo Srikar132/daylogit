@@ -24,3 +24,9 @@ export function canManageWorkspace(role: OrgRole | null | undefined): boolean {
 export function canWriteEntries(role: OrgRole | null | undefined): boolean {
   return role === "owner" || role === "admin";
 }
+
+/** better-auth's org plugin only grants "organization:delete" to the owner
+ *  role by default (admins can update, not delete) — this mirrors that. */
+export function canDeleteWorkspace(role: OrgRole | null | undefined): boolean {
+  return role === "owner";
+}

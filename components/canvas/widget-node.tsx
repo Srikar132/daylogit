@@ -10,6 +10,7 @@ import { MailSummaryWidget } from "@/components/canvas/mail-summary-widget";
 import { MarkdownWidget } from "@/components/canvas/markdown-widget";
 import { MediaWidget } from "@/components/canvas/media-widget";
 import { ProjectDocWidget } from "@/components/canvas/project-doc-widget";
+import { WorkspaceSettingsWidget, type WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
 import type { BoardColumn } from "@/lib/worklog";
 import type { DocProjectSummary } from "@/lib/actions/docs";
 import type { GmailStatus } from "@/lib/actions/gmail";
@@ -45,6 +46,8 @@ export type WidgetNodeData = {
   /** Server-prefetched — only populated for type "mail-summary". */
   initialGmailStatus?: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
+  /** Server-prefetched — only populated for type "workspace-settings". */
+  initialWorkspaceMembers?: WorkspaceMembersData;
 };
 
 // Dispatches on the node's OWN live `data` prop rather than a closure baked
@@ -79,6 +82,8 @@ function renderWidgetBody(id: string, data: WidgetNodeData): React.ReactNode {
         />
       );
     }
+    case "workspace-settings":
+      return <WorkspaceSettingsWidget initialData={data.initialWorkspaceMembers} />;
     default:
       return null;
   }

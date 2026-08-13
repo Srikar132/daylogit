@@ -8,6 +8,7 @@ import { requireViewerContext } from "@/lib/workspace";
 import { getMyWidgetLayout } from "@/lib/actions/widgets";
 import { getDocProjectsByIds } from "@/lib/actions/docs";
 import { getGmailStatus, getTodayMessages } from "@/lib/actions/gmail";
+import { getWorkspaceMembersData } from "@/lib/actions/members";
 
 export const dynamic = "force-dynamic";
 
@@ -55,9 +56,10 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     .map((item) => (item.data as { docProjectId?: unknown } | undefined)?.docProjectId)
     .filter((id): id is string => typeof id === "string");
 
-  const [initialProjectSummaries, initialGmailStatus] = await Promise.all([
+  const [initialProjectSummaries, initialGmailStatus, initialWorkspaceMembers] = await Promise.all([
     getDocProjectsByIds(projectDocIds),
     getGmailStatus(),
+    getWorkspaceMembersData(),
   ]);
 
   // Only known once we have the status above, so this can't join wave 2.
@@ -74,6 +76,7 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
       initialProjectSummaries={initialProjectSummaries}
       initialGmailStatus={initialGmailStatus}
       initialGmailMessages={initialGmailMessages}
+      initialWorkspaceMembers={initialWorkspaceMembers}
     />
   );
 }

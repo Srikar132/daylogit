@@ -10,6 +10,7 @@ import type { WidgetLayoutItem } from "@/lib/db";
 import type { DocProjectSummary } from "@/lib/actions/docs";
 import type { GmailStatus } from "@/lib/actions/gmail";
 import type { GmailMessageSummary } from "@/lib/gmail";
+import type { WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
 
 interface WorklogDashboardProps {
   slug: string;
@@ -19,6 +20,7 @@ interface WorklogDashboardProps {
   initialProjectSummaries: Record<string, DocProjectSummary>;
   initialGmailStatus: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
+  initialWorkspaceMembers?: WorkspaceMembersData;
 }
 
 export function WorklogDashboard({
@@ -29,6 +31,7 @@ export function WorklogDashboard({
   initialProjectSummaries,
   initialGmailStatus,
   initialGmailMessages,
+  initialWorkspaceMembers,
 }: WorklogDashboardProps) {
   // One QueryClient per mounted dashboard, not per-render — a plain module
   // singleton would leak cache across different users/workspaces in the
@@ -61,6 +64,7 @@ export function WorklogDashboard({
           initialProjectSummaries={initialProjectSummaries}
           initialGmailStatus={initialGmailStatus}
           initialGmailMessages={initialGmailMessages}
+          initialWorkspaceMembers={initialWorkspaceMembers}
         />
         <CanvasChrome />
       </div>
