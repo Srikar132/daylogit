@@ -11,6 +11,9 @@ import { MarkdownWidget } from "@/components/canvas/markdown-widget";
 import { MediaWidget } from "@/components/canvas/media-widget";
 import { ProjectDocWidget } from "@/components/canvas/project-doc-widget";
 import type { BoardColumn } from "@/lib/worklog";
+import type { DocProjectSummary } from "@/lib/actions/docs";
+import type { GmailStatus } from "@/lib/actions/gmail";
+import type { GmailMessageSummary } from "@/lib/gmail";
 
 export type WidgetNodeData = {
   title: string;
@@ -36,6 +39,12 @@ export type WidgetNodeData = {
   columns?: BoardColumn[];
   /** Only populated for type "project-doc" — needed for the MANAGE link. */
   slug?: string;
+  /** Server-prefetched — batched once for every project-doc card on the
+   *  canvas rather than each one fetching its own on mount. */
+  initialSummary?: DocProjectSummary;
+  /** Server-prefetched — only populated for type "mail-summary". */
+  initialGmailStatus?: GmailStatus;
+  initialGmailMessages?: GmailMessageSummary[];
 };
 
 // Dispatches on the node's OWN live `data` prop rather than a closure baked
@@ -48,7 +57,12 @@ function renderWidgetBody(id: string, data: WidgetNodeData): React.ReactNode {
     case "board":
       return <BoardWidget columns={data.columns ?? []} canWrite={data.canWrite} />;
     case "mail-summary":
-      return <MailSummaryWidget />;
+      return (
+        <MailSummaryWidget
+          initialStatus={data.initialGmailStatus}
+          initialMessages={data.initialGmailMessages}
+        />
+      );
     case "markdown":
       return <MarkdownWidget id={id} initialContent={data.widgetData} canWrite={data.canWrite} />;
     case "media":
@@ -61,6 +75,7 @@ function renderWidgetBody(id: string, data: WidgetNodeData): React.ReactNode {
           docProjectId={typeof docProjectId === "string" ? docProjectId : undefined}
           slug={data.slug}
           canWrite={data.canWrite}
+          initialSummary={data.initialSummary}
         />
       );
     }
@@ -68,6 +83,22 @@ function renderWidgetBody(id: string, data: WidgetNodeData): React.ReactNode {
       return null;
   }
 }
+
+// Fully invisible — the selected/entered ring highlight (rendered on the
+// card itself) is the only visual affordance; the actual drag hit-areas
+// (all 4 edges + 4 corners) sit right on top of that ring, transparent.
+// Must be the LAST child in DOM order, after the card content, or the
+// content div (same size, no z-index) paints over it and swallows every
+// pointer event except the exact corner pixel the content's own border
+// radius happens to leave uncovered.
+// Sizes are set via style (not className) so they win regardless of
+// Tailwind specificity — generous on purpose: `autoScale` keeps this a
+// fixed screen size at any zoom level, so it has to be big enough to grab
+// comfortably even zoomed all the way out.
+const RESIZE_LINE_CLASS = "!border-transparent";
+const RESIZE_LINE_STYLE = { borderWidth: 10 };
+const RESIZE_HANDLE_CLASS = "!border-none !bg-transparent";
+const RESIZE_HANDLE_STYLE = { width: 22, height: 22 };
 
 export function WidgetNode({ id, data, selected }: NodeProps) {
   const widgetData = data as unknown as WidgetNodeData;
@@ -80,6 +111,7 @@ export function WidgetNode({ id, data, selected }: NodeProps) {
   } = widgetData;
   const [entered, setEntered] = useState(false);
   const [floatingAction, setFloatingAction] = useState<FloatingAction | null>(null);
+  const [floatingToolbar, setFloatingToolbar] = useState<React.ReactNode | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Stepping "inside" a widget (double-click/double-tap) makes its body
@@ -107,38 +139,57 @@ export function WidgetNode({ id, data, selected }: NodeProps) {
   }, [entered]);
 
   if (chromeless) {
+    // alwaysInteractive (media) skips the gate entirely, same as the
+    // non-chromeless branch below; everything else chromeless (notes)
+    // still needs the double-click-to-enter gate — chromeless only means
+    // "no header/border chrome," it's independent of that gating.
+    const chromelessEntered = alwaysInteractive || entered;
+    // Media has no background of its own (the image/video fills the card);
+    // notes are plain text and need a card background to actually read as
+    // a card — default matches the app's usual card tone, user-overridable.
+    const cardBg =
+      widgetData.widgetType === "markdown"
+        ? ((widgetData.widgetData?.bgColor as string | undefined) ?? "#131314")
+        : undefined;
     return (
-      <>
+      <div ref={rootRef} className="relative h-full w-full">
+        <div
+          onDoubleClick={() => setEntered(true)}
+          style={{ ...(minHeight ? { minHeight } : undefined), backgroundColor: cardBg }}
+          className={`h-full w-full overflow-hidden rounded-2xl transition-shadow ${
+            entered ? "ring-2 ring-[#8ab4f8]/40" : ""
+          } ${chromelessEntered ? "cursor-auto" : "cursor-default"}`}
+        >
+          <WidgetChromeProvider value={{ entered: chromelessEntered, setFloatingAction, setFloatingToolbar }}>
+            {renderWidgetBody(id, widgetData)}
+          </WidgetChromeProvider>
+        </div>
+
+        {/* Toolbar sits above the card, outside its overflow-hidden clip —
+            per-card, not one shared canvas-wide bar. */}
+        {entered && floatingToolbar && (
+          <div className="nodrag absolute inset-x-0 bottom-full z-10 mb-2 flex justify-center">
+            {floatingToolbar}
+          </div>
+        )}
+
         {resizable && (
           <NodeResizer
             minWidth={120}
             minHeight={80}
             isVisible={selected}
-            lineClassName="!border-[#8ab4f8]/50"
-            handleClassName="!hidden"
+            lineClassName={RESIZE_LINE_CLASS}
+            lineStyle={RESIZE_LINE_STYLE}
+            handleClassName={RESIZE_HANDLE_CLASS}
+            handleStyle={RESIZE_HANDLE_STYLE}
           />
         )}
-        <div className="h-full w-full overflow-hidden rounded-2xl">
-          <WidgetChromeProvider value={{ entered: true, setFloatingAction }}>
-            {renderWidgetBody(id, widgetData)}
-          </WidgetChromeProvider>
-        </div>
-      </>
+      </div>
     );
   }
 
   return (
     <>
-      {resizable && (
-        <NodeResizer
-          minWidth={320}
-          minHeight={240}
-          isVisible={selected}
-          lineClassName="!border-[#8ab4f8]/50"
-          handleClassName="!hidden"
-        />
-      )}
-
       {/* Unclipped outer wrapper — the floating action button (below) sits
           just outside the card's own bounds, so this level must not clip. */}
       <motion.div
@@ -178,7 +229,7 @@ export function WidgetNode({ id, data, selected }: NodeProps) {
               entered || alwaysInteractive ? "cursor-auto" : "pointer-events-none cursor-default"
             }`}
           >
-            <WidgetChromeProvider value={{ entered: entered || alwaysInteractive, setFloatingAction }}>
+            <WidgetChromeProvider value={{ entered: entered || alwaysInteractive, setFloatingAction, setFloatingToolbar }}>
               {renderWidgetBody(id, widgetData)}
             </WidgetChromeProvider>
           </div>
@@ -196,6 +247,18 @@ export function WidgetNode({ id, data, selected }: NodeProps) {
           >
             <floatingAction.icon className="h-4 w-4" />
           </button>
+        )}
+
+        {resizable && (
+          <NodeResizer
+            minWidth={320}
+            minHeight={240}
+            isVisible={selected}
+            lineClassName={RESIZE_LINE_CLASS}
+            lineStyle={RESIZE_LINE_STYLE}
+            handleClassName={RESIZE_HANDLE_CLASS}
+            handleStyle={RESIZE_HANDLE_STYLE}
+          />
         )}
       </motion.div>
     </>

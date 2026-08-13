@@ -30,6 +30,9 @@ import { CanvasActionsProvider } from "@/components/canvas/canvas-actions-contex
 import { saveMyWidgetLayout } from "@/lib/actions/widgets";
 import type { WidgetLayoutItem } from "@/lib/db";
 import type { BoardColumn } from "@/lib/worklog";
+import type { DocProjectSummary } from "@/lib/actions/docs";
+import type { GmailStatus } from "@/lib/actions/gmail";
+import type { GmailMessageSummary } from "@/lib/gmail";
 
 const MULTI_INSTANCE_WIDGET_TYPES = new Set(["markdown", "media", "project-doc"]);
 const KNOWN_WIDGET_TYPES = new Set(["board", "mail-summary", "markdown", "media", "project-doc"]);
@@ -69,6 +72,9 @@ type WidgetNodeContext = {
   columns: BoardColumn[];
   canWrite: boolean;
   slug: string;
+  initialProjectSummaries: Record<string, DocProjectSummary>;
+  initialGmailStatus: GmailStatus;
+  initialGmailMessages?: GmailMessageSummary[];
 };
 
 function widgetTitle(type: string): string {
@@ -123,11 +129,18 @@ const ALWAYS_INTERACTIVE_WIDGET_TYPES = new Set(["media", "project-doc"]);
 // No header/border chrome — just the media filling the node. Since there's
 // no ".widget-drag-handle" element to grab, these skip the dragHandle
 // restriction entirely so the node is draggable from anywhere on it instead.
-const CHROMELESS_WIDGET_TYPES = new Set(["media"]);
+// Notes are chromeless too now (no header/toolbar-in-card) but, unlike
+// media, aren't in ALWAYS_INTERACTIVE_WIDGET_TYPES above — chromeless just
+// means "no header/border chrome," it's independent of the double-click
+// gate, which notes still need (accidental text edits while repositioning
+// the canvas are a real risk; media's link clicks/video controls aren't).
+const CHROMELESS_WIDGET_TYPES = new Set(["media", "markdown"]);
 
 function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node {
   const autoMin = item.height === undefined ? AUTO_HEIGHT_MIN[item.type] : undefined;
   const chromeless = CHROMELESS_WIDGET_TYPES.has(item.type);
+
+  const docProjectId = item.type === "project-doc" ? (item.data?.docProjectId as string | undefined) : undefined;
 
   const data: WidgetNodeData = {
     title: widgetTitle(item.type),
@@ -140,6 +153,9 @@ function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node {
     widgetData: item.data,
     columns: item.type === "board" ? ctx.columns : undefined,
     slug: item.type === "project-doc" ? ctx.slug : undefined,
+    initialSummary: docProjectId ? ctx.initialProjectSummaries[docProjectId] : undefined,
+    initialGmailStatus: item.type === "mail-summary" ? ctx.initialGmailStatus : undefined,
+    initialGmailMessages: item.type === "mail-summary" ? ctx.initialGmailMessages : undefined,
   };
 
   return {
@@ -160,10 +176,24 @@ interface CanvasShellProps {
   initialLayout: WidgetLayoutItem[] | null;
   columns: BoardColumn[];
   canWrite: boolean;
+  initialProjectSummaries: Record<string, DocProjectSummary>;
+  initialGmailStatus: GmailStatus;
+  initialGmailMessages?: GmailMessageSummary[];
 }
 
-function CanvasInner({ slug, initialLayout, columns, canWrite }: CanvasShellProps) {
-  const ctx: WidgetNodeContext = useMemo(() => ({ columns, canWrite, slug }), [columns, canWrite, slug]);
+function CanvasInner({
+  slug,
+  initialLayout,
+  columns,
+  canWrite,
+  initialProjectSummaries,
+  initialGmailStatus,
+  initialGmailMessages,
+}: CanvasShellProps) {
+  const ctx: WidgetNodeContext = useMemo(
+    () => ({ columns, canWrite, slug, initialProjectSummaries, initialGmailStatus, initialGmailMessages }),
+    [columns, canWrite, slug, initialProjectSummaries, initialGmailStatus, initialGmailMessages],
+  );
 
   const [nodes, setNodes, onNodesChangeInternal] = useNodesState<Node>(
     mergeWithDefaults(initialLayout).map((item) => buildNode(item, ctx)),

@@ -12,38 +12,11 @@ import { TableHeader } from "@tiptap/extension-table-header";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TaskList } from "@tiptap/extension-task-list";
 import { TaskItem } from "@tiptap/extension-task-item";
-import {
-  Bold,
-  Italic,
-  Strikethrough,
-  List,
-  ListOrdered,
-  ListChecks,
-  Heading1,
-  Heading2,
-  Trash2,
-} from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FontSize } from "@/lib/tiptap/font-size";
 import { useWidgetChrome } from "@/components/canvas/widget-chrome-context";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
-
-const TEXT_COLORS = ["#e8eaed", "#8ab4f8", "#81c995", "#fdd663", "#f28b82", "#c58af9"];
-const BG_COLORS = [
-  { label: "None", value: null },
-  { value: "rgba(138,180,248,0.25)" },
-  { value: "rgba(129,201,149,0.25)" },
-  { value: "rgba(253,214,99,0.25)" },
-  { value: "rgba(242,139,130,0.25)" },
-  { value: "rgba(197,138,249,0.25)" },
-] as { label?: string; value: string | null }[];
-
-const FONT_SIZES = [
-  { label: "S", value: "12px" },
-  { label: "M", value: "14px" },
-  { label: "L", value: "18px" },
-  { label: "XL", value: "24px" },
-];
+import { NoteToolbar } from "@/components/canvas/note-toolbar";
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -53,10 +26,27 @@ interface MarkdownWidgetProps {
   canWrite: boolean;
 }
 
+/** Chromeless — no header, no grip icon. While entered, pushes its own
+ *  formatting toolbar up to WidgetNode via setFloatingToolbar, which renders
+ *  it just above this card (outside its clip) — one toolbar per note. */
+// Older notes stored the raw Tiptap doc directly as widgetData; notes saved
+// after the card-background feature wrap it as { content, bgColor } instead
+// — detect a raw doc by its "type": "doc" field to stay compatible with both.
+function isWrappedData(data: Record<string, unknown>): data is { content?: Record<string, unknown>; bgColor?: string } {
+  return data.type !== "doc";
+}
+
 export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetProps) {
-  const { entered } = useWidgetChrome();
+  const { entered, setFloatingToolbar } = useWidgetChrome();
   const { updateWidgetData, deleteWidget } = useCanvasActions();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bumped on every editor transaction so bold/italic/etc. active-state
+  // highlighting in the toolbar follows the live cursor.
+  const [, forceRender] = useState(0);
+
+  const wrapped = initialContent && isWrappedData(initialContent) ? initialContent : undefined;
+  const initialDoc = wrapped ? wrapped.content : initialContent;
+  const [bgColor, setBgColor] = useState<string | undefined>(wrapped?.bgColor);
 
   const editor = useEditor({
     extensions: [
@@ -73,7 +63,7 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
       TaskList,
       TaskItem.configure({ nested: true }),
     ],
-    content: initialContent ?? "",
+    content: initialDoc ?? "",
     editable: entered && canWrite,
     immediatelyRender: false,
     editorProps: {
@@ -82,151 +72,56 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
     onUpdate: ({ editor }) => {
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
-        updateWidgetData(id, editor.getJSON());
+        updateWidgetData(id, { content: editor.getJSON(), bgColor });
       }, SAVE_DEBOUNCE_MS);
     },
+    onTransaction: () => forceRender((n) => n + 1),
   });
 
+  const handleBgColorChange = useCallback(
+    (color: string | undefined) => {
+      setBgColor(color);
+      if (editor) updateWidgetData(id, { content: editor.getJSON(), bgColor: color });
+    },
+    [editor, id, updateWidgetData],
+  );
+
   useEffect(() => {
-    editor?.setEditable(entered && canWrite);
+    // Second arg suppresses setEditable's own "update" event — without it,
+    // just entering/exiting the note (which flips editable) fires onUpdate
+    // and queues a save even though nothing was actually typed.
+    editor?.setEditable(entered && canWrite, false);
   }, [editor, entered, canWrite]);
+
+  useEffect(() => {
+    if (!entered || !editor) {
+      setFloatingToolbar(null);
+      return;
+    }
+    setFloatingToolbar(
+      <NoteToolbar
+        editor={editor}
+        bgColor={bgColor}
+        onBgColorChange={handleBgColorChange}
+        onDelete={() => deleteWidget(id)}
+      />,
+    );
+    return () => setFloatingToolbar(null);
+  }, [entered, editor, id, bgColor, deleteWidget, handleBgColorChange, setFloatingToolbar]);
 
   if (!editor) return null;
 
   return (
-    <div className="flex h-full flex-col">
-      {entered && canWrite && (
-        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-white/[0.06] px-2 py-1.5">
-          <ToolbarButton onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")}>
-            <Bold className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")}>
-            <Italic className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleStrike().run()}
-            active={editor.isActive("strike")}
-          >
-            <Strikethrough className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            active={editor.isActive("heading", { level: 1 })}
-          >
-            <Heading1 className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            active={editor.isActive("heading", { level: 2 })}
-          >
-            <Heading2 className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleBulletList().run()}
-            active={editor.isActive("bulletList")}
-          >
-            <List className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleOrderedList().run()}
-            active={editor.isActive("orderedList")}
-          >
-            <ListOrdered className="h-3.5 w-3.5" />
-          </ToolbarButton>
-          <ToolbarButton
-            onClick={() => editor.chain().focus().toggleTaskList().run()}
-            active={editor.isActive("taskList")}
-          >
-            <ListChecks className="h-3.5 w-3.5" />
-          </ToolbarButton>
-
-          <div className="mx-0.5 h-4 w-px bg-white/[0.08]" />
-
-          <div className="flex items-center gap-0.5">
-            {TEXT_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                title="Text color"
-                onClick={() => editor.chain().focus().setColor(color).run()}
-                className="h-4 w-4 shrink-0 rounded-full ring-1 ring-white/10 cursor-pointer"
-                style={{ backgroundColor: color }}
-              />
-            ))}
-          </div>
-
-          <div className="mx-0.5 h-4 w-px bg-white/[0.08]" />
-
-          <div className="flex items-center gap-0.5">
-            {BG_COLORS.map((bg, i) => (
-              <button
-                key={i}
-                type="button"
-                title={bg.label ?? "Highlight"}
-                onClick={() =>
-                  bg.value
-                    ? editor.chain().focus().setHighlight({ color: bg.value }).run()
-                    : editor.chain().focus().unsetHighlight().run()
-                }
-                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full ring-1 ring-white/10 cursor-pointer"
-                style={{ backgroundColor: bg.value ?? "transparent" }}
-              >
-                {!bg.value && <span className="text-[8px] text-[#f28b82]">×</span>}
-              </button>
-            ))}
-          </div>
-
-          <div className="mx-0.5 h-4 w-px bg-white/[0.08]" />
-
-          <div className="flex items-center gap-0.5">
-            {FONT_SIZES.map((s) => (
-              <button
-                key={s.value}
-                type="button"
-                onClick={() => editor.chain().focus().setFontSize(s.value).run()}
-                className="rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-[#9aa0a6] hover:bg-white/[0.06] hover:text-[#e8eaed] cursor-pointer"
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => deleteWidget(id)}
-            title="Delete note"
-            className="ml-auto rounded-md p-1 text-[#9aa0a6] hover:bg-[#f28b82]/10 hover:text-[#f28b82] cursor-pointer"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
-
-      <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin px-3 py-2">
-        <EditorContent editor={editor} className="prose-note h-full text-[13.5px] text-[#e8eaed]" />
-      </div>
-    </div>
-  );
-}
-
-function ToolbarButton({
-  onClick,
-  active,
-  children,
-}: {
-  onClick: () => void;
-  active: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-md p-1.5 cursor-pointer ${
-        active ? "bg-[#8ab4f8]/20 text-[#8ab4f8]" : "text-[#9aa0a6] hover:bg-white/[0.06] hover:text-[#e8eaed]"
+    <div
+      className={`h-full min-h-0 flex-1 overflow-y-auto scrollbar-thin px-3 py-2 ${
+        // Only nodrag+nowheel once entered — un-entered, this needs to stay
+        // a normal (non-exempted) surface so grabbing it drags the whole
+        // chromeless node, same as media. Once entered, scrolling/selecting
+        // text shouldn't be hijacked by the canvas's own pan/zoom.
+        entered ? "nodrag nowheel cursor-text" : "cursor-grab"
       }`}
     >
-      {children}
-    </button>
+      <EditorContent editor={editor} className="prose-note h-full text-[13.5px] text-[#e8eaed]" />
+    </div>
   );
 }

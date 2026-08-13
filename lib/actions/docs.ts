@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db, docProjects, docPages, type DocLink } from "@/lib/db";
 import { requireViewerContext } from "@/lib/workspace";
@@ -256,6 +256,20 @@ export async function getDocProject(id: string): Promise<DocProjectSummary | nul
     .where(and(eq(docProjects.id, id), eq(docProjects.organizationId, viewer.organizationId)))
     .limit(1);
   return row ?? null;
+}
+
+/** Batched lookup for the canvas — avoids one client round-trip per
+ *  project-doc widget on the canvas. Called server-side (page.tsx) so it
+ *  runs in parallel with the other canvas prefetches, and again client-side
+ *  via useQuery for anything created after that initial render. */
+export async function getDocProjectsByIds(ids: string[]): Promise<Record<string, DocProjectSummary>> {
+  if (ids.length === 0) return {};
+  const viewer = await requireViewerContext();
+  const rows = await db
+    .select()
+    .from(docProjects)
+    .where(and(inArray(docProjects.id, ids), eq(docProjects.organizationId, viewer.organizationId)));
+  return Object.fromEntries(rows.map((row) => [row.id, row]));
 }
 
 export async function getDocPages(docProjectId: string): Promise<DocPageRow[]> {

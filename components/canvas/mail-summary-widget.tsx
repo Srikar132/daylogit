@@ -1,43 +1,43 @@
 "use client";
 
-import { Loader2, Mail, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, Loader2, Mail, RefreshCw } from "lucide-react";
+import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
-import { getGmailStatus, getTodayMessages } from "@/lib/actions/gmail";
+import { getGmailStatus, getTodayMessages, type GmailStatus } from "@/lib/actions/gmail";
 import { GMAIL_READONLY_SCOPE, type GmailMessageSummary } from "@/lib/gmail";
+import { Skeleton } from "@/components/ui/skeleton";
 
-type LoadState =
-  | { phase: "checking" }
-  | { phase: "disconnected" }
-  | { phase: "loading" }
-  | { phase: "ready"; messages: GmailMessageSummary[] }
-  | { phase: "error"; message: string };
+interface MailSummaryWidgetProps {
+  /** Server-prefetched alongside every other canvas widget's initial data
+   *  (see app/workspace/[slug]/page.tsx) — seeded into the queries below so
+   *  a normal page load never shows a loading state for this widget at all. */
+  initialStatus?: GmailStatus;
+  initialMessages?: GmailMessageSummary[];
+}
 
-export function MailSummaryWidget() {
-  const [state, setState] = useState<LoadState>({ phase: "checking" });
+function senderInitial(from: string): string {
+  const name = from.match(/^[^<]+/)?.[0]?.trim() || from;
+  return name.charAt(0).toUpperCase() || "?";
+}
+
+export function MailSummaryWidget({ initialStatus, initialMessages }: MailSummaryWidgetProps) {
   const [isConnecting, setIsConnecting] = useState(false);
 
-  const load = useCallback(async () => {
-    const status = await getGmailStatus();
-    if (!status.connected) {
-      setState({ phase: "disconnected" });
-      return;
-    }
-    setState({ phase: "loading" });
-    const result = await getTodayMessages();
-    if (result.error) {
-      setState({ phase: "error", message: result.error });
-    } else {
-      setState({ phase: "ready", messages: result.messages ?? [] });
-    }
-  }, []);
+  const statusQuery = useQuery({
+    queryKey: ["gmailStatus"],
+    queryFn: getGmailStatus,
+    initialData: initialStatus,
+  });
 
-  useEffect(() => {
-    // Legitimate fetch-on-mount — there's no prop/state to derive this from
-    // during render, it's an external Gmail API call.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    load();
-  }, [load]);
+  const connected = statusQuery.data?.connected ?? false;
+
+  const messagesQuery = useQuery({
+    queryKey: ["gmailMessages"],
+    queryFn: getTodayMessages,
+    initialData: initialMessages ? { messages: initialMessages } : undefined,
+    enabled: connected,
+  });
 
   async function handleConnect() {
     setIsConnecting(true);
@@ -52,42 +52,41 @@ export function MailSummaryWidget() {
     }
   }
 
+  const messages = messagesQuery.data?.messages ?? [];
+  const loadingMessages = connected && messagesQuery.isLoading;
+
   return (
     <div className="flex h-full flex-col p-4">
       <div className="flex items-center gap-2 pb-3">
         <Mail className="h-4 w-4 shrink-0 text-[#8ab4f8]" />
-        <h2 className="flex-1 truncate text-[13.5px] font-medium text-[#e8eaed]">
-          Today&apos;s Mail
-        </h2>
-        {state.phase === "ready" && (
+        <h2 className="flex-1 truncate text-[13.5px] font-medium text-[#e8eaed]">Today&apos;s Mail</h2>
+        {connected && (
           <button
             type="button"
-            onClick={load}
+            onClick={() => messagesQuery.refetch()}
+            disabled={messagesQuery.isFetching}
             title="Refresh"
-            className="rounded-md p-1 text-[#9aa0a6] hover:bg-white/[0.06] hover:text-[#e8eaed] cursor-pointer"
+            className="rounded-md p-1 text-[#9aa0a6] hover:bg-white/[0.06] hover:text-[#e8eaed] cursor-pointer disabled:opacity-50"
           >
-            <RefreshCw className="h-3.5 w-3.5" />
+            <RefreshCw className={`h-3.5 w-3.5 ${messagesQuery.isFetching ? "animate-spin" : ""}`} />
           </button>
         )}
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-thin">
-        {state.phase === "checking" && (
-          <div className="flex w-full items-center justify-center py-8 text-[#9aa0a6]">
-            <Loader2 className="h-4 w-4 animate-spin" />
-          </div>
-        )}
+        {statusQuery.isLoading && <MailSkeletonRows />}
 
-        {state.phase === "disconnected" && (
+        {!statusQuery.isLoading && !connected && (
           <div className="flex w-full flex-col items-center gap-3 py-6 text-center">
-            <p className="text-[12.5px] text-[#9aa0a6]">
-              Connect Gmail to see today&apos;s emails here.
-            </p>
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-gradient-to-br from-[#8ab4f8]/20 to-[#8ab4f8]/5 text-[#8ab4f8]">
+              <Mail className="h-4.5 w-4.5" />
+            </div>
+            <p className="text-[12.5px] text-[#9aa0a6]">Connect Gmail to see today&apos;s emails here.</p>
             <button
               type="button"
               onClick={handleConnect}
               disabled={isConnecting}
-              className="flex items-center gap-1.5 rounded-full bg-[#8ab4f8] px-3.5 py-1.5 text-[12.5px] font-semibold text-[#141414] disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-1.5 rounded-full bg-gradient-to-b from-[#9dc4ff] to-[#8ab4f8] px-3.5 py-1.5 text-[12.5px] font-semibold text-[#141414] shadow-[0_2px_8px_rgba(138,180,248,0.35)] disabled:opacity-50 cursor-pointer"
             >
               {isConnecting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Connect Gmail
@@ -95,39 +94,62 @@ export function MailSummaryWidget() {
           </div>
         )}
 
-        {state.phase === "loading" && (
-          <div className="flex w-full items-center justify-center py-8 text-[#9aa0a6]">
-            <Loader2 className="h-4 w-4 animate-spin" />
+        {connected && loadingMessages && <MailSkeletonRows />}
+
+        {connected && !loadingMessages && messagesQuery.isError && (
+          <div className="flex w-full items-center justify-center gap-1.5 py-8 text-center text-[12.5px] text-[#f28b82]">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            Couldn&apos;t reach Gmail. Try again shortly.
           </div>
         )}
 
-        {state.phase === "error" && (
-          <p className="w-full text-center text-[12.5px] text-[#f28b82]">{state.message}</p>
-        )}
-
-        {state.phase === "ready" &&
-          (state.messages.length === 0 ? (
-            <p className="w-full py-6 text-center text-[12.5px] text-[#9aa0a6]">
-              No new emails today.
-            </p>
+        {connected &&
+          !loadingMessages &&
+          !messagesQuery.isError &&
+          (messages.length === 0 ? (
+            <p className="w-full py-6 text-center text-[12.5px] text-[#9aa0a6]">No new emails today.</p>
           ) : (
-            <div className="flex flex-col gap-1.5">
-              {state.messages.map((m, i) => (
-                <div key={i} className="rounded-lg bg-white/[0.05] px-2.5 py-2">
-                  <span className="min-w-0 truncate text-[12.5px] font-medium text-[#e8eaed]">
-                    {m.subject}
-                  </span>
-                  <p className="truncate text-[11.5px] text-[#9aa0a6]">{m.from}</p>
-                  {m.snippet && (
-                    <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-[#80868b]">
-                      {m.snippet}
-                    </p>
-                  )}
+            <div className="flex flex-col gap-1">
+              {messages.map((m, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-2.5 rounded-lg px-1.5 py-2 transition-colors hover:bg-white/[0.04]"
+                >
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#8ab4f8]/15 text-[11px] font-semibold text-[#8ab4f8]">
+                    {senderInitial(m.from)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="min-w-0 truncate text-[12.5px] font-medium text-[#e8eaed]">
+                        {m.subject}
+                      </span>
+                    </div>
+                    <p className="truncate text-[11.5px] text-[#9aa0a6]">{m.from}</p>
+                    {m.snippet && (
+                      <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-snug text-[#80868b]">{m.snippet}</p>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
           ))}
       </div>
+    </div>
+  );
+}
+
+function MailSkeletonRows() {
+  return (
+    <div className="flex flex-col gap-1 py-1">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="flex items-start gap-2.5 px-1.5 py-2">
+          <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
+          <div className="min-w-0 flex-1 space-y-1.5 pt-0.5">
+            <Skeleton className="h-3 w-3/5" />
+            <Skeleton className="h-2.5 w-2/5" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

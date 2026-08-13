@@ -15,6 +15,11 @@ type WidgetChromeValue = {
   /** A widget calls this (in an effect) to ask WidgetNode to render an external
    *  action button just outside its own card — pass null to remove it. */
   setFloatingAction: (action: FloatingAction | null) => void;
+  /** Same idea as setFloatingAction but for a whole toolbar rather than one
+   *  button — rendered above the card, outside its own clipping, so a
+   *  rounded/overflow-hidden card doesn't cut off a full formatting bar.
+   *  Pass null to remove it. */
+  setFloatingToolbar: (toolbar: React.ReactNode | null) => void;
 };
 
 const WidgetChromeContext = createContext<WidgetChromeValue | null>(null);
