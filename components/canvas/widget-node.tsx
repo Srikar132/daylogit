@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { WidgetChromeProvider, type FloatingAction } from "@/components/canvas/widget-chrome-context";
 import { BoardWidget } from "@/components/canvas/board-widget";
+import { BookmarkWidget } from "@/components/canvas/bookmark-widget";
 import { MailSummaryWidget } from "@/components/canvas/mail-summary-widget";
 import { MediaWidget } from "@/components/canvas/media-widget";
 import { ProjectDocWidget } from "@/components/canvas/project-doc-widget";
@@ -67,6 +68,8 @@ function renderWidgetBody(id: string, data: WidgetNodeData): React.ReactNode {
   switch (data.widgetType) {
     case "board":
       return <BoardWidget columns={data.columns ?? []} canWrite={data.canWrite} />;
+    case "bookmark":
+      return <BookmarkWidget id={id} canWrite={data.canWrite} widgetData={data.widgetData} />;
     case "mail-summary":
       return (
         <MailSummaryWidget

@@ -142,7 +142,7 @@ export function WorklogBoard({ initialColumns, onRefresh, canWrite }: WorklogBoa
       }}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex h-full w-full gap-2 p-3">
+      <div className="flex h-full w-full gap-3 p-3">
         {STATUS_COLUMNS.map(({ status }) => {
           const column = columns.find((c) => c.status === status) ?? { status, entries: [] };
           return (

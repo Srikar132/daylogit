@@ -54,8 +54,8 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center gap-2 border-b border-white/[0.06] px-3 py-2">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1.5">
+      <div className="flex shrink-0 items-center gap-2 border-b border-white/[0.08] px-3 py-2">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-2.5 py-1.5">
           <Search className="h-3.5 w-3.5 shrink-0 text-[#9aa0a6]" />
           <input
             type="text"
@@ -66,7 +66,7 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
           />
         </div>
 
-        <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-white/5 p-0.5">
+        <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
           <button
             type="button"
             onClick={() => setDate((d) => addDaysIST(d, -1))}
@@ -100,7 +100,7 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
           type="button"
           disabled
           title="Coming soon"
-          className="flex shrink-0 items-center gap-1.5 rounded-full bg-white/5 px-2.5 py-1.5 text-[12px] text-[#80868b] opacity-60"
+          className="flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.06] bg-white/[0.04] px-2.5 py-1.5 text-[12px] text-[#80868b] opacity-60"
         >
           <ListFilter className="h-3.5 w-3.5" />
           Filter

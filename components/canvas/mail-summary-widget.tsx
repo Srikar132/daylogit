@@ -1,12 +1,13 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, Loader2, Mail, RefreshCw } from "lucide-react";
+import { AlertCircle, Loader2, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { authClient } from "@/lib/auth-client";
 import { getGmailStatus, getTodayMessages, type GmailStatus } from "@/lib/actions/gmail";
 import { GMAIL_READONLY_SCOPE, type GmailMessageSummary } from "@/lib/gmail";
 import { Skeleton } from "@/components/ui/skeleton";
+import { GmailIcon } from "@/components/icons/gmail-icon";
 
 interface MailSummaryWidgetProps {
   /** Server-prefetched alongside every other canvas widget's initial data
@@ -57,9 +58,12 @@ export function MailSummaryWidget({ initialStatus, initialMessages }: MailSummar
 
   return (
     <div className="flex h-full flex-col p-4">
+      {/* No repeated "Today's Mail" text here — WidgetNode's own chrome
+          header already shows the title; this row just carries the brand
+          icon (identifies which service this is, at a glance) + refresh. */}
       <div className="flex items-center gap-2 pb-3">
-        <Mail className="h-4 w-4 shrink-0 text-[#8ab4f8]" />
-        <h2 className="flex-1 truncate text-[13.5px] font-medium text-[#e8eaed]">Today&apos;s Mail</h2>
+        <GmailIcon className="h-5 w-[26px] shrink-0 rounded-[3px] shadow-sm" />
+        <div className="flex-1" />
         {connected && (
           <button
             type="button"
@@ -78,8 +82,8 @@ export function MailSummaryWidget({ initialStatus, initialMessages }: MailSummar
 
         {!statusQuery.isLoading && !connected && (
           <div className="flex w-full flex-col items-center gap-3 py-6 text-center">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-gradient-to-br from-[#8ab4f8]/20 to-[#8ab4f8]/5 text-[#8ab4f8]">
-              <Mail className="h-4.5 w-4.5" />
+            <div className="flex h-12 w-16 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] shadow-inner">
+              <GmailIcon className="h-7 w-[38px]" />
             </div>
             <p className="text-[12.5px] text-[#9aa0a6]">Connect Gmail to see today&apos;s emails here.</p>
             <button
@@ -113,7 +117,7 @@ export function MailSummaryWidget({ initialStatus, initialMessages }: MailSummar
               {messages.map((m, i) => (
                 <div
                   key={i}
-                  className="flex items-start gap-2.5 rounded-lg px-1.5 py-2 transition-colors hover:bg-white/[0.04]"
+                  className="flex items-start gap-2.5 rounded-lg px-1.5 py-2 transition-colors hover:bg-white/[0.05]"
                 >
                   <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#8ab4f8]/15 text-[11px] font-semibold text-[#8ab4f8]">
                     {senderInitial(m.from)}

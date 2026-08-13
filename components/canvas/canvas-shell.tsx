@@ -35,9 +35,10 @@ import type { GmailStatus } from "@/lib/actions/gmail";
 import type { GmailMessageSummary } from "@/lib/gmail";
 import type { WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
 
-const MULTI_INSTANCE_WIDGET_TYPES = new Set(["markdown", "media", "project-doc"]);
+const MULTI_INSTANCE_WIDGET_TYPES = new Set(["bookmark", "markdown", "media", "project-doc"]);
 const KNOWN_WIDGET_TYPES = new Set([
   "board",
+  "bookmark",
   "mail-summary",
   "markdown",
   "media",
@@ -65,6 +66,10 @@ const DEFAULT_LAYOUT: WidgetLayoutItem[] = [
 // fresh drop-point, since there's no real height to center on yet).
 const NEW_WIDGET_DEFAULTS: Record<string, { width: number; height?: number }> = {
   markdown: { width: 340 },
+  // Height omitted — a draft URL form and a filled-out preview card (image
+  // + title + description) are very different heights, same reasoning as
+  // project-doc/markdown below.
+  bookmark: { width: 300 },
   // Fixed box regardless of the pasted file's real aspect ratio — the media
   // itself renders with object-fit:contain, so nothing distorts; the user
   // resizes to taste rather than the box auto-fitting the source dimensions.
@@ -93,6 +98,8 @@ function widgetTitle(type: string): string {
   switch (type) {
     case "board":
       return "Board";
+    case "bookmark":
+      return "Bookmark";
     case "mail-summary":
       return "Today's Mail";
     case "markdown":
@@ -133,13 +140,13 @@ function mergeWithDefaults(saved: WidgetLayoutItem[] | null): WidgetLayoutItem[]
 // Floor for widget types that auto-size to content (no persisted height yet)
 // — without this an almost-empty note would render as a sliver. Height still
 // grows past this naturally as content grows; it's a min, not a fixed size.
-const AUTO_HEIGHT_MIN: Record<string, number> = { markdown: 240, "project-doc": 200 };
+const AUTO_HEIGHT_MIN: Record<string, number> = { markdown: 240, "project-doc": 200, bookmark: 220 };
 // Media needs right-click/video controls to work immediately, not after an
 // extra double-click — the entered-gating built for text/board widgets
 // would otherwise block the whole point of this widget.
-// Project-doc cards only have link clicks + a MANAGE button, nothing that
-// needs entered-mode's inline-typing gating either.
-const ALWAYS_INTERACTIVE_WIDGET_TYPES = new Set(["media", "project-doc"]);
+// Project-doc and bookmark cards only have link clicks + small buttons,
+// nothing that needs entered-mode's inline-typing gating either.
+const ALWAYS_INTERACTIVE_WIDGET_TYPES = new Set(["media", "project-doc", "bookmark"]);
 // No header/border chrome — just the media filling the node. Since there's
 // no ".widget-drag-handle" element to grab, these skip the dragHandle
 // restriction entirely so the node is draggable from anywhere on it instead.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
-import { FolderGit2, NotebookPen } from "lucide-react";
+import { Bookmark, FolderGit2, NotebookPen } from "lucide-react";
 
 export interface AddableWidgetType {
   type: string;
@@ -12,6 +12,7 @@ export interface AddableWidgetType {
 export const ADDABLE_WIDGET_TYPES: AddableWidgetType[] = [
   { type: "markdown", label: "Note", icon: NotebookPen },
   { type: "project-doc", label: "Project Doc", icon: FolderGit2 },
+  { type: "bookmark", label: "Bookmark", icon: Bookmark },
   // More widget types land here over time — each just adds an icon.
 ];
 

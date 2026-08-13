@@ -7,6 +7,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { CreateTaskForm } from "@/components/create-task-form";
 import { LogCardContent } from "@/components/log-card";
+import { getWorkTypeColor } from "@/components/work-type-icon";
 import type { EntryListItem } from "@/lib/worklog";
 import type { TaskStatus } from "@/lib/db";
 
@@ -46,6 +47,11 @@ function DraggableLogItem({
     transition,
     opacity: isDragging ? 0.3 : 1,
     zIndex: isDragging ? 50 : 1,
+    // Left accent bar keyed to work type — the same color WorkTypeIcon
+    // already uses, just reused as a scannable strip instead of only a
+    // tiny icon, so a column reads at a glance instead of needing to
+    // parse each row's icon individually.
+    borderLeftColor: getWorkTypeColor(log.workType),
   };
 
   return (
@@ -55,7 +61,7 @@ function DraggableLogItem({
       onClick={() => onOpen?.(log)}
       {...attributes}
       {...listeners}
-      className="flex w-full cursor-pointer flex-col gap-1 rounded-lg bg-white/[0.05] px-2.5 py-2 text-left transition-colors hover:bg-white/[0.08] touch-none select-none"
+      className="flex w-full cursor-pointer flex-col gap-1 rounded-lg border border-white/[0.06] border-l-[3px] bg-white/[0.03] px-2.5 py-2 text-left shadow-sm transition-colors hover:border-white/[0.1] hover:bg-white/[0.06] touch-none select-none"
     >
       <LogCardContent log={log} />
     </div>
@@ -77,18 +83,20 @@ export function StatusColumn({
   return (
     <div
       ref={setNodeRef}
-      className={`flex min-w-0 flex-1 flex-col rounded-xl px-2 py-2 transition-colors ${
-        isDropTarget ? "bg-[#8ab4f8]/[0.06] ring-1 ring-[#8ab4f8]/40" : ""
+      className={`flex min-w-0 flex-1 flex-col rounded-xl border px-2 py-2 transition-colors ${
+        isDropTarget
+          ? "border-[#8ab4f8]/40 bg-[#8ab4f8]/[0.06] ring-1 ring-[#8ab4f8]/40"
+          : "border-white/[0.05] bg-white/[0.015]"
       }`}
     >
-      <div className="flex items-center gap-2 px-1 pb-2">
+      <div className="flex items-center gap-2 border-b border-white/[0.05] px-1 pb-2">
         <h2 className="truncate text-[13.5px] font-medium text-[#e8eaed]">{label}</h2>
         <span className="shrink-0 rounded-md bg-white/[0.08] px-1.5 py-0.5 text-[11px] font-medium text-[#9aa0a6]">
           {entries.length}
         </span>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto scrollbar-thin">
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto scrollbar-thin pt-1.5">
         <SortableContext
           items={entries.map((log) => `log-${log.id}`)}
           strategy={verticalListSortingStrategy}
