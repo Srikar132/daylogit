@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { organization } from "better-auth/plugins";
+import { mcp, organization } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 import * as authSchema from "@/lib/auth-schema";
@@ -46,6 +46,12 @@ export const auth = betterAuth({
     organization({
       allowUserToCreateOrganization: true,
     }),
+    // OAuth 2.0 authorization server for MCP clients (Claude Desktop/Code) —
+    // replaces the old manual-API-key "paste a token" connect flow with a
+    // real "click Connect, approve in the browser" one. Org-scoping for
+    // step 1 is resolved live per-request (lib/mcp-auth.ts) rather than
+    // baked into the token — see the OAuth connect flow plan for why.
+    mcp({ loginPage: "/sign-in" }),
     // Must be last — lets server actions calling auth.api.* set cookies directly.
     nextCookies(),
   ],

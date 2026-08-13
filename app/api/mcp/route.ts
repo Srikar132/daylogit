@@ -1,6 +1,6 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { z } from "zod";
-import { verifyApiKey, type ApiKeyIdentity } from "@/lib/auth";
+import { verifyOAuthBearer, type OAuthIdentity } from "@/lib/mcp-auth";
 import { canWriteEntries } from "@/lib/permissions";
 import { WORK_TYPES, type WorkType } from "@/lib/constants";
 import {
@@ -18,18 +18,18 @@ const WORK_TYPE_VALUES = WORK_TYPES.map((t) => t.value) as [WorkType, ...WorkTyp
 
 type ToolExtra = { authInfo?: { extra?: Record<string, unknown> } };
 
-function identityFrom(extra: ToolExtra): ApiKeyIdentity {
-  const identity = extra.authInfo?.extra as ApiKeyIdentity | undefined;
+function identityFrom(extra: ToolExtra): OAuthIdentity {
+  const identity = extra.authInfo?.extra as OAuthIdentity | undefined;
   if (!identity) {
     throw new Error("Missing authenticated identity for this MCP request.");
   }
   return identity;
 }
 
-function requireWriteAccess(identity: ApiKeyIdentity) {
+function requireWriteAccess(identity: OAuthIdentity) {
   if (!canWriteEntries(identity.role)) {
     throw new Error(
-      "This API key has view-only access on its workspace — ask a workspace owner/admin for a write-capable key.",
+      "This account has view-only access on its workspace — ask a workspace owner/admin for write access.",
     );
   }
 }
@@ -266,7 +266,7 @@ const handler = createMcpHandler(
   { basePath: "/api", disableSse: true },
 );
 
-const authHandler = withMcpAuth(handler, verifyApiKey, {
+const authHandler = withMcpAuth(handler, verifyOAuthBearer, {
   required: true,
 });
 

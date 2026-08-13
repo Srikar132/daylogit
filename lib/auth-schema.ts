@@ -135,6 +135,77 @@ export const invitation = pgTable(
   ],
 );
 
+// Added for the `mcp` plugin (OAuth 2.0 authorization server for MCP
+// clients) — field lists mirror better-auth's own declared schema exactly
+// (node_modules/better-auth/dist/plugins/oidc-provider/schema.mjs).
+export const oauthApplication = pgTable(
+  "oauth_application",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    icon: text("icon"),
+    metadata: text("metadata"),
+    clientId: text("client_id").notNull().unique(),
+    clientSecret: text("client_secret"),
+    redirectUrls: text("redirect_urls").notNull(),
+    type: text("type").notNull(),
+    disabled: boolean("disabled").default(false).notNull(),
+    userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at")
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("oauth_application_userId_idx").on(table.userId)],
+);
+
+export const oauthAccessToken = pgTable(
+  "oauth_access_token",
+  {
+    id: text("id").primaryKey(),
+    accessToken: text("access_token").notNull().unique(),
+    refreshToken: text("refresh_token").notNull().unique(),
+    accessTokenExpiresAt: timestamp("access_token_expires_at").notNull(),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at").notNull(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => oauthApplication.clientId, { onDelete: "cascade" }),
+    userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    scopes: text("scopes").notNull(),
+    createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at")
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("oauth_access_token_clientId_idx").on(table.clientId),
+    index("oauth_access_token_userId_idx").on(table.userId),
+  ],
+);
+
+export const oauthConsent = pgTable(
+  "oauth_consent",
+  {
+    id: text("id").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => oauthApplication.clientId, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    scopes: text("scopes").notNull(),
+    createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at")
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    consentGiven: boolean("consent_given").notNull(),
+  },
+  (table) => [
+    index("oauth_consent_clientId_idx").on(table.clientId),
+    index("oauth_consent_userId_idx").on(table.userId),
+  ],
+);
+
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
@@ -179,6 +250,33 @@ export const invitationRelations = relations(invitation, ({ one }) => ({
   }),
   user: one(user, {
     fields: [invitation.inviterId],
+    references: [user.id],
+  }),
+}));
+
+export const oauthApplicationRelations = relations(oauthApplication, ({ many }) => ({
+  accessTokens: many(oauthAccessToken),
+  consents: many(oauthConsent),
+}));
+
+export const oauthAccessTokenRelations = relations(oauthAccessToken, ({ one }) => ({
+  client: one(oauthApplication, {
+    fields: [oauthAccessToken.clientId],
+    references: [oauthApplication.clientId],
+  }),
+  user: one(user, {
+    fields: [oauthAccessToken.userId],
+    references: [user.id],
+  }),
+}));
+
+export const oauthConsentRelations = relations(oauthConsent, ({ one }) => ({
+  client: one(oauthApplication, {
+    fields: [oauthConsent.clientId],
+    references: [oauthApplication.clientId],
+  }),
+  user: one(user, {
+    fields: [oauthConsent.userId],
     references: [user.id],
   }),
 }));

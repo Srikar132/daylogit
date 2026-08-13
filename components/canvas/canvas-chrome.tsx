@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, KeyRound, LogOut, Plus } from "lucide-react";
+import { Check, ChevronDown, LogOut, Plug, Plus } from "lucide-react";
 import { authClient, useActiveOrganization, useListOrganizations, useSession } from "@/lib/auth-client";
 
 function useClickOutside(onOutside: () => void) {
@@ -116,12 +116,12 @@ function UserMenu() {
               type="button"
               onClick={() => {
                 setOpen(false);
-                router.push("/settings/api-keys");
+                router.push("/settings/connections");
               }}
               className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] text-[#e8eaed] hover:bg-white/5 cursor-pointer"
             >
-              <KeyRound className="h-3.5 w-3.5 text-[#9aa0a6]" />
-              API keys
+              <Plug className="h-3.5 w-3.5 text-[#9aa0a6]" />
+              Connections
             </button>
             <button
               type="button"

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getApiKeyIdentity } from "@/lib/auth";
+import { resolveOAuthIdentity } from "@/lib/mcp-auth";
 import {
   WorklogError,
   searchEntries,
@@ -26,7 +26,7 @@ const searchParamsSchema = z.object({
 });
 
 export async function GET(request: Request): Promise<NextResponse> {
-  const identity = await getApiKeyIdentity(request);
+  const identity = await resolveOAuthIdentity(request);
   if (!identity) return unauthorized();
 
   const { searchParams } = new URL(request.url);
@@ -55,7 +55,7 @@ const patchBodySchema = z.object({
 });
 
 export async function PATCH(request: Request): Promise<NextResponse> {
-  const identity = await getApiKeyIdentity(request);
+  const identity = await resolveOAuthIdentity(request);
   if (!identity) return unauthorized();
 
   const parsed = patchBodySchema.safeParse(
@@ -83,7 +83,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
 const deleteBodySchema = z.object({ id: z.string().uuid() });
 
 export async function DELETE(request: Request): Promise<NextResponse> {
-  const identity = await getApiKeyIdentity(request);
+  const identity = await resolveOAuthIdentity(request);
   if (!identity) return unauthorized();
 
   const parsed = deleteBodySchema.safeParse(
