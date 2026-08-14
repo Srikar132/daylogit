@@ -58,7 +58,7 @@ export async function runCleanupJobs(jobs: CleanupJob[]): Promise<void> {
  *  or that failed and are still under the retry cap. Only sweeps jobs older
  *  than 2 minutes so it doesn't race the in-flight immediate attempt for a
  *  delete that just happened. */
-export async function sweepPendingCloudinaryCleanup(limit = 50): Promise<{ processed: number }> {
+export async function sweepPendingCloudinaryCleanup(limit = 200): Promise<{ processed: number }> {
   const cutoff = new Date(Date.now() - 2 * 60 * 1000);
   const jobs = await db
     .select({
