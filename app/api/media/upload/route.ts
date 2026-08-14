@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { v2 as cloudinary } from "cloudinary";
 import { getRequestIdentity } from "@/lib/api-auth";
 import { canWriteEntries } from "@/lib/permissions";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -16,6 +17,11 @@ export async function POST(request: Request) {
   if (!identity) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!canWriteEntries(identity.role)) {
     return NextResponse.json({ error: "View-only access" }, { status: 403 });
+  }
+
+  const rateLimit = await checkRateLimit(`upload:${identity.userId}`);
+  if (!rateLimit.success) {
+    return NextResponse.json({ error: rateLimit.error }, { status: 429 });
   }
 
   const formData = await request.formData();

@@ -1,12 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, albums, albumGroups, albumImages } from "@/lib/db";
 import { requireViewerContext } from "@/lib/workspace";
 import { canWriteEntries } from "@/lib/permissions";
 import { cloudinary } from "@/lib/cloudinary";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export type ActionState = { error?: string };
 
@@ -37,6 +39,8 @@ export async function createAlbumAction(name: string): Promise<{ error?: string;
 
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
+  const rateLimit = await checkRateLimit(`create-album:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const [album] = await db
     .insert(albums)
@@ -55,6 +59,8 @@ export async function renameAlbumAction(id: string, name: string): Promise<Actio
 
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
+  const rateLimit = await checkRateLimit(`rename-album:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const owned = await getOwnedAlbum(id, viewer.organizationId);
   if (!owned) return { error: "Album not found." };
@@ -67,6 +73,8 @@ export async function renameAlbumAction(id: string, name: string): Promise<Actio
 export async function deleteAlbumAction(id: string): Promise<ActionState> {
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
+  const rateLimit = await checkRateLimit(`delete-album:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const owned = await getOwnedAlbum(id, viewer.organizationId);
   if (!owned) return { error: "Album not found." };
@@ -76,18 +84,19 @@ export async function deleteAlbumAction(id: string): Promise<ActionState> {
     .from(albumImages)
     .where(eq(albumImages.albumId, id));
 
-  // Best-effort — a Cloudinary hiccup shouldn't block deleting the album
-  // itself. Worst case is an orphaned asset, not a stuck delete.
-  await Promise.all(
-    images.map((img) =>
-      img.cloudinaryPublicId
-        ? cloudinary.uploader.destroy(img.cloudinaryPublicId).catch(() => undefined)
-        : Promise.resolve(),
-    ),
-  );
-
   await db.delete(albums).where(eq(albums.id, id));
   revalidatePath("/workspace", "layout");
+
+  // Best-effort, run after the response is sent — a slow or failing
+  // Cloudinary call shouldn't hold up the delete the user is waiting on.
+  // Worst case is an orphaned asset, not a stuck delete. `after()` (not a
+  // bare fire-and-forget) keeps this running past the point the function
+  // would otherwise be frozen once the response goes out.
+  const publicIds = images.map((img) => img.cloudinaryPublicId).filter((id): id is string => !!id);
+  if (publicIds.length > 0) {
+    after(() => Promise.all(publicIds.map((publicId) => cloudinary.uploader.destroy(publicId).catch(() => undefined))));
+  }
+
   return {};
 }
 
@@ -159,6 +168,8 @@ export async function createAlbumGroup(albumId: string, name: string): Promise<{
 
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
+  const rateLimit = await checkRateLimit(`create-album-group:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const owned = await getOwnedAlbum(albumId, viewer.organizationId);
   if (!owned) return { error: "Album not found." };
@@ -184,6 +195,8 @@ export async function renameAlbumGroup(id: string, albumId: string, name: string
 
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
+  const rateLimit = await checkRateLimit(`rename-album-group:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const owned = await getOwnedAlbum(albumId, viewer.organizationId);
   if (!owned) return { error: "Album not found." };
@@ -196,6 +209,8 @@ export async function renameAlbumGroup(id: string, albumId: string, name: string
 export async function deleteAlbumGroup(id: string, albumId: string): Promise<ActionState> {
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
+  const rateLimit = await checkRateLimit(`delete-album-group:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const owned = await getOwnedAlbum(albumId, viewer.organizationId);
   if (!owned) return { error: "Album not found." };
@@ -224,6 +239,8 @@ export async function addImageToAlbum(
 
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
+  const rateLimit = await checkRateLimit(`add-image:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const owned = await getOwnedAlbum(parsed.data.albumId, viewer.organizationId);
   if (!owned) return { error: "Album not found." };
@@ -265,6 +282,8 @@ export async function renameImageAction(id: string, name: string): Promise<Actio
 
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
+  const rateLimit = await checkRateLimit(`rename-image:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const albumId = await getOwnedImageAlbumId(id, viewer.organizationId);
   if (!albumId) return { error: "Image not found." };
@@ -277,6 +296,8 @@ export async function renameImageAction(id: string, name: string): Promise<Actio
 export async function deleteImageAction(id: string): Promise<ActionState> {
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
+  const rateLimit = await checkRateLimit(`delete-image:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const [row] = await db
     .select({ albumId: albumImages.albumId, cloudinaryPublicId: albumImages.cloudinaryPublicId })
@@ -287,17 +308,22 @@ export async function deleteImageAction(id: string): Promise<ActionState> {
   const owned = await getOwnedAlbum(row.albumId, viewer.organizationId);
   if (!owned) return { error: "Image not found." };
 
-  if (row.cloudinaryPublicId) {
-    await cloudinary.uploader.destroy(row.cloudinaryPublicId).catch(() => undefined);
-  }
   await db.delete(albumImages).where(eq(albumImages.id, id));
   revalidatePath("/workspace", "layout");
+
+  if (row.cloudinaryPublicId) {
+    const publicId = row.cloudinaryPublicId;
+    after(() => cloudinary.uploader.destroy(publicId).catch(() => undefined));
+  }
+
   return {};
 }
 
 export async function moveImageToGroupAction(id: string, groupId: string | null): Promise<ActionState> {
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
+  const rateLimit = await checkRateLimit(`move-image:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const albumId = await getOwnedImageAlbumId(id, viewer.organizationId);
   if (!albumId) return { error: "Image not found." };
@@ -310,6 +336,8 @@ export async function moveImageToGroupAction(id: string, groupId: string | null)
 export async function copyImageAction(id: string, targetGroupId?: string | null): Promise<{ error?: string; id?: string }> {
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
+  const rateLimit = await checkRateLimit(`copy-image:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const [row] = await db.select().from(albumImages).where(eq(albumImages.id, id)).limit(1);
   if (!row) return { error: "Image not found." };
@@ -340,6 +368,8 @@ export async function bulkDeleteImagesAction(ids: string[]): Promise<ActionState
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
   if (ids.length === 0) return {};
+  const rateLimit = await checkRateLimit(`bulk-delete-images:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const rows = await db
     .select({ id: albumImages.id, albumId: albumImages.albumId, cloudinaryPublicId: albumImages.cloudinaryPublicId })
@@ -355,13 +385,14 @@ export async function bulkDeleteImagesAction(ids: string[]): Promise<ActionState
   const deletable = rows.filter((r) => ownedSet.has(r.albumId));
   if (deletable.length === 0) return {};
 
-  await Promise.all(
-    deletable.map((r) =>
-      r.cloudinaryPublicId ? cloudinary.uploader.destroy(r.cloudinaryPublicId).catch(() => undefined) : Promise.resolve(),
-    ),
-  );
   await db.delete(albumImages).where(inArray(albumImages.id, deletable.map((r) => r.id)));
   revalidatePath("/workspace", "layout");
+
+  const publicIds = deletable.map((r) => r.cloudinaryPublicId).filter((id): id is string => !!id);
+  if (publicIds.length > 0) {
+    after(() => Promise.all(publicIds.map((publicId) => cloudinary.uploader.destroy(publicId).catch(() => undefined))));
+  }
+
   return {};
 }
 
@@ -369,6 +400,8 @@ export async function bulkMoveImagesAction(ids: string[], groupId: string | null
   const viewer = await requireViewerContext();
   if (!canWriteEntries(viewer.role)) return { error: "View-only access." };
   if (ids.length === 0) return {};
+  const rateLimit = await checkRateLimit(`bulk-move-images:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const rows = await db.select({ id: albumImages.id, albumId: albumImages.albumId }).from(albumImages).where(inArray(albumImages.id, ids));
   const albumIds = [...new Set(rows.map((r) => r.albumId))];

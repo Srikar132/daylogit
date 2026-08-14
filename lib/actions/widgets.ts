@@ -5,6 +5,7 @@ import { and, count, eq } from "drizzle-orm";
 import { db, widgets, type WidgetLayoutItem } from "@/lib/db";
 import { requireViewerContext } from "@/lib/workspace";
 import { mergeWithDefaults } from "@/components/canvas/widget-registry";
+import { checkDragRateLimit, checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_WIDGETS_PER_WORKSPACE = 64;
 
@@ -85,6 +86,8 @@ export async function createWidgetAction(item: WidgetLayoutItem): Promise<{ erro
   if (!parsed.success) return { error: "Invalid widget." };
 
   const viewer = await requireViewerContext();
+  const rateLimit = await checkRateLimit(`create-widget:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
 
   const [{ value: existingCount }] = await db
     .select({ value: count() })
@@ -116,6 +119,9 @@ export async function updateWidgetPositionAction(input: z.infer<typeof positionS
   if (!parsed.success) return { error: "Invalid position." };
 
   const viewer = await requireViewerContext();
+  const rateLimit = await checkDragRateLimit(`update-widget-position:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
+
   await db
     .update(widgets)
     .set({ x: parsed.data.x, y: parsed.data.y, updatedAt: new Date() })
@@ -131,6 +137,9 @@ export async function updateWidgetSizeAction(input: z.infer<typeof sizeSchema>):
   if (!parsed.success) return { error: "Invalid size." };
 
   const viewer = await requireViewerContext();
+  const rateLimit = await checkDragRateLimit(`update-widget-size:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
+
   await db
     .update(widgets)
     .set({ width: parsed.data.width, height: parsed.data.height, updatedAt: new Date() })
@@ -144,6 +153,9 @@ export async function updateWidgetDataAction(id: string, data: Record<string, un
   if (!parsedId.success) return { error: "Invalid widget id." };
 
   const viewer = await requireViewerContext();
+  const rateLimit = await checkDragRateLimit(`update-widget-data:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
+
   await db
     .update(widgets)
     .set({ data, updatedAt: new Date() })
@@ -157,6 +169,9 @@ export async function deleteWidgetAction(id: string): Promise<{ error?: string }
   if (!parsedId.success) return { error: "Invalid widget id." };
 
   const viewer = await requireViewerContext();
+  const rateLimit = await checkRateLimit(`delete-widget:${viewer.userId}`);
+  if (!rateLimit.success) return { error: rateLimit.error };
+
   await db.delete(widgets).where(ownedWhere(parsedId.data, viewer.organizationId, viewer.userId));
 
   return {};
