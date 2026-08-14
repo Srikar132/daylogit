@@ -5,11 +5,11 @@ change.
 
 ## Current Phase
 
-- In progress — platform hardening (caching, upload architecture, scale) after the gallery/album feature + widgets-per-row migration + full TanStack Query conversion (branch: `feature/gallery-widgets-tanstack-migration`, pushed).
+- Platform hardening pass complete (caching, upload architecture, rate limiting, cache invalidation, Cloudinary cleanup) — branch `feature/gallery-widgets-tanstack-migration`, pushed, not yet merged to `main`.
 
 ## Current Goal
 
-- Work through the queued system-design items below one at a time, sorted by (ease, priority) — easiest + highest-value first.
+- None active. The remaining Next Up items are both deliberately deferred — user confirmed (2026-08-15) to stop rather than build them now, since both are premature at current scale and this repo's convention is to not design for hypothetical future load. Pick this file back up when either item's trigger condition below is actually met, or when new work is scoped.
 
 ## Completed
 
@@ -33,9 +33,10 @@ change.
 
 ## Next Up
 
-1. **Virtualize the photo grid** (medium effort, low priority now) — `react-virtuoso`/`react-window` once albums regularly hold thousands of loaded images; today's DOM-all-loaded-items approach is fine at current scale.
-2. **Canvas node spatial index** (high effort, low priority) — react-flow's viewport culling is an O(n) scan; only worth a quad-tree once widget counts reach the many-hundreds.
-3. **Widget-resize-content-not-adjusting bug** (unclear repro, low priority) — reported earlier in the session; user never supplied which widget or reproduction steps. Still open, not actively pursued.
+- Nothing actively queued. The two deferred items:
+  1. **Virtualize the photo grid** (medium effort) — trigger: albums regularly holding thousands of loaded images. `react-virtuoso`/`react-window`; today's DOM-all-loaded-items approach is fine at current scale.
+  2. **Canvas node spatial index** (high effort) — trigger: workspaces regularly having many-hundreds of widgets. react-flow's viewport culling is an O(n) scan today, which is fine until then.
+- **Widget-resize-content-not-adjusting bug** (unclear repro) — reported earlier in the session; user never supplied which widget or reproduction steps. Still open, not actively pursued — needs a fresh repro from the user to move forward.
 
 ## Open Questions
 
@@ -56,6 +57,7 @@ change.
 
 ## Session Notes
 
-- Branch `feature/gallery-widgets-tanstack-migration` is pushed to origin, one commit, not yet merged to `main`.
+- Platform hardening queue (rate limiting, Cloudinary cleanup fire-and-forget, TanStack cache persistence, direct-to-Cloudinary upload, tagged cache invalidation, durable Cloudinary cleanup job) is fully worked through as of 2026-08-15. Branch not yet merged to `main` — merge whenever ready.
+- Branch `feature/gallery-widgets-tanstack-migration` is pushed to origin, multiple commits, not yet merged to `main`.
 - Full verification convention: `rm -rf .next && npx tsc --noEmit`, `npx eslint app components lib tests`, `npx vitest run`, `timeout 150 npx next build` — run all four after every meaningful change in this list.
 - Work through "Next Up" strictly one item at a time; update this file's Completed/In Progress/Next Up sections as each lands before starting the next.
