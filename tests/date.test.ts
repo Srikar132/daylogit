@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDaysIST, formatDateLabel, formatFullDate, todayIST } from "./date";
+import { addDaysIST, formatDateLabel, formatFullDate, todayIST } from "@/lib/date";
 
 describe("todayIST", () => {
   it("returns a YYYY-MM-DD string", () => {

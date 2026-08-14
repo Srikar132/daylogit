@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isFillerSummary } from "./constants";
+import { isFillerSummary } from "@/lib/constants";
 
 describe("isFillerSummary", () => {
   it("rejects summaries under the minimum length", () => {

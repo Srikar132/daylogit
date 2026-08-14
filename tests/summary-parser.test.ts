@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isStructuredSummary, parseWorklogSummary } from "./summary-parser";
+import { isStructuredSummary, parseWorklogSummary } from "@/lib/summary-parser";
 
 describe("parseWorklogSummary", () => {
   it("parses a single task/what-done block with no trailing delimiter", () => {

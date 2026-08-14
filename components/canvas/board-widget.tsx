@@ -1,8 +1,8 @@
 "use client";
 
 import { ChevronLeft, ChevronRight, ListFilter, Search } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { WorklogBoard } from "@/components/worklog-board";
+import { useCallback, useRef, useState } from "react";
+import { WorklogBoard } from "@/components/board/worklog-board";
 import { addDaysIST, formatDateLabel, todayIST } from "@/lib/date";
 import type { BoardColumn } from "@/lib/worklog";
 
@@ -18,6 +18,11 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
   const [search, setSearch] = useState("");
   const [columns, setColumns] = useState(initialColumns);
   const [isLoading, setIsLoading] = useState(false);
+  // Bumped every time `columns` gets a genuinely new data set (a fetch
+  // resolves, or we reset back to the server-provided initial) — passed to
+  // WorklogBoard as its `key`, so it remounts with fresh local state instead
+  // of needing an effect to resync a prop into state.
+  const [dataVersion, setDataVersion] = useState(0);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchBoard = useCallback(async (targetDate: string, targetSearch: string) => {
@@ -29,6 +34,7 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
       if (res.ok) {
         const data = await res.json();
         setColumns(data.columns);
+        setDataVersion((v) => v + 1);
       }
     } catch (err) {
       console.error("Failed to load board", err);
@@ -37,14 +43,15 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
     }
   }, []);
 
-  useEffect(() => {
-    if (date === todayIST() && !search.trim()) {
+  function goToDate(newDate: string) {
+    setDate(newDate);
+    if (newDate === todayIST() && !search.trim()) {
       setColumns(initialColumns);
-      return;
+      setDataVersion((v) => v + 1);
+    } else {
+      fetchBoard(newDate, search);
     }
-    fetchBoard(date, search);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
+  }
 
   function handleSearchChange(value: string) {
     setSearch(value);
@@ -69,7 +76,7 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
         <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
           <button
             type="button"
-            onClick={() => setDate((d) => addDaysIST(d, -1))}
+            onClick={() => goToDate(addDaysIST(date, -1))}
             className="rounded-full p-1 text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed] cursor-pointer"
             title="Previous day"
           >
@@ -77,7 +84,7 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
           </button>
           <button
             type="button"
-            onClick={() => setDate(todayIST())}
+            onClick={() => goToDate(todayIST())}
             className="px-2 text-[12px] font-medium text-[#e8eaed] cursor-pointer"
             title="Jump to today"
           >
@@ -85,7 +92,7 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
           </button>
           <button
             type="button"
-            onClick={() => setDate((d) => addDaysIST(d, 1))}
+            onClick={() => goToDate(addDaysIST(date, 1))}
             className="rounded-full p-1 text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed] cursor-pointer"
             title="Next day"
           >
@@ -108,6 +115,7 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <WorklogBoard
+          key={dataVersion}
           initialColumns={columns}
           onRefresh={() => fetchBoard(date, search)}
           canWrite={canWrite}

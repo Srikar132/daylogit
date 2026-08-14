@@ -1,4 +1,4 @@
-import { WorkTypeIcon } from "@/components/work-type-icon";
+import { WorkTypeIcon } from "@/components/board/work-type-icon";
 import { formatDateLabel } from "@/lib/date";
 import type { EntryListItem } from "@/lib/worklog";
 

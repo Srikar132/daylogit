@@ -15,11 +15,11 @@ import {
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
-import { EntryDetailDialog } from "@/components/entry-detail-dialog";
-import { LogCardContent } from "@/components/log-card";
-import { StatusColumn } from "@/components/status-column";
+import { EntryDetailDialog } from "@/components/board/entry-detail-dialog";
+import { LogCardContent } from "@/components/board/log-card";
+import { StatusColumn } from "@/components/board/status-column";
 import { STATUS_COLUMNS, STATUS_LABEL } from "@/lib/constants";
 import type { TaskStatus } from "@/lib/db";
 import type { BoardColumn, EntryListItem } from "@/lib/worklog";
@@ -41,13 +41,13 @@ export function WorklogBoard({ initialColumns, onRefresh, canWrite }: WorklogBoa
   // local state, it doesn't change how many dialogs exist.
   const openEntryId = searchParams.get("entry");
 
+  // Seeded once from the parent's data and then mutated locally (optimistic
+  // drag reorder) — the parent remounts this component (via `key`) whenever
+  // it has a genuinely new data set, so this never needs to resync a prop
+  // into state after mount.
   const [columns, setColumns] = useState<BoardColumn[]>(initialColumns);
   const [activeLog, setActiveLog] = useState<EntryListItem | null>(null);
   const [overStatus, setOverStatus] = useState<TaskStatus | null>(null);
-
-  useEffect(() => {
-    setColumns(initialColumns);
-  }, [initialColumns]);
 
   const openEntryStatus = openEntryId
     ? columns.find((c) => c.entries.some((e) => e.id === openEntryId))?.status

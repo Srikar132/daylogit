@@ -5,9 +5,9 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { CreateTaskForm } from "@/components/create-task-form";
-import { LogCardContent } from "@/components/log-card";
-import { getWorkTypeColor } from "@/components/work-type-icon";
+import { CreateTaskForm } from "@/components/board/create-task-form";
+import { LogCardContent } from "@/components/board/log-card";
+import { getWorkTypeColor } from "@/components/board/work-type-icon";
 import type { EntryListItem } from "@/lib/worklog";
 import type { TaskStatus } from "@/lib/db";
 

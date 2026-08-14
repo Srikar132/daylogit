@@ -3,7 +3,7 @@
 import { CalendarDays, ChevronDown, CornerDownLeft, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { WORK_TYPES, type WorkType } from "@/lib/constants";
-import { WorkTypeIcon } from "@/components/work-type-icon";
+import { WorkTypeIcon } from "@/components/board/work-type-icon";
 import type { TaskStatus } from "@/lib/db";
 
 interface CreateTaskFormProps {
