@@ -1,0 +1,59 @@
+"use client";
+
+import { useMutation } from "@tanstack/react-query";
+import {
+  bulkDeleteImagesAction,
+  bulkMoveImagesAction,
+  copyImageAction,
+  deleteImageAction,
+  moveImageToGroupAction,
+  renameImageAction,
+} from "@/lib/actions/albums";
+import { unwrapAction } from "@/lib/query-utils";
+
+/** Shared by photo-grid.tsx's per-tile menu, lightbox.tsx's action bar, and
+ *  bulk-action-bar.tsx — the same six write paths, previously duplicated
+ *  (rename/delete/duplicate/move ×2, bulk delete/move) across those files
+ *  as raw `.then(onChanged)` calls. */
+export function useAlbumImageMutations(onChanged: () => void) {
+  const rename = useMutation({
+    mutationFn: (input: { id: string; name: string }) => unwrapAction(renameImageAction(input.id, input.name)),
+    onSuccess: onChanged,
+    onError: (err) => console.error("Failed to rename photo:", err),
+  });
+
+  const duplicate = useMutation({
+    mutationFn: (input: { id: string; targetGroupId?: string | null }) =>
+      unwrapAction(copyImageAction(input.id, input.targetGroupId)),
+    onSuccess: onChanged,
+    onError: (err) => console.error("Failed to duplicate photo:", err),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => unwrapAction(deleteImageAction(id)),
+    onSuccess: onChanged,
+    onError: (err) => console.error("Failed to delete photo:", err),
+  });
+
+  const move = useMutation({
+    mutationFn: (input: { id: string; groupId: string | null }) =>
+      unwrapAction(moveImageToGroupAction(input.id, input.groupId)),
+    onSuccess: onChanged,
+    onError: (err) => console.error("Failed to move photo:", err),
+  });
+
+  const bulkDelete = useMutation({
+    mutationFn: (ids: string[]) => unwrapAction(bulkDeleteImagesAction(ids)),
+    onSuccess: onChanged,
+    onError: (err) => console.error("Failed to delete photos:", err),
+  });
+
+  const bulkMove = useMutation({
+    mutationFn: (input: { ids: string[]; groupId: string | null }) =>
+      unwrapAction(bulkMoveImagesAction(input.ids, input.groupId)),
+    onSuccess: onChanged,
+    onError: (err) => console.error("Failed to move photos:", err),
+  });
+
+  return { rename, duplicate, remove, move, bulkDelete, bulkMove };
+}

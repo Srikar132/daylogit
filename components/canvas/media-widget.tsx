@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Copy, Download, Link as LinkIcon, Loader2, Trash2 } from "lucide-react";
+import { AlertCircle, Copy, Download, Link as LinkIcon, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
 import {
@@ -9,6 +9,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface MediaWidgetProps {
   id: string;
@@ -148,16 +149,21 @@ export function MediaWidget({ id, data, canWrite }: MediaWidgetProps) {
   }
 
   if (media.status === "uploading") {
+    // Shaped like where the image/video itself will end up (fills the
+    // card) rather than a generic centered spinner — the progress bar still
+    // carries the one thing a skeleton can't (actual upload percentage).
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        <Loader2 className="h-5 w-5 animate-spin text-[#8ab4f8]" />
-        <div className="w-full max-w-[180px] overflow-hidden rounded-full bg-white/[0.06]">
-          <div
-            className="h-1 rounded-full bg-[#8ab4f8] transition-[width] duration-150"
-            style={{ width: `${progress}%` }}
-          />
+      <div className="relative h-full w-full overflow-hidden rounded-2xl">
+        <Skeleton className="absolute inset-0 rounded-2xl" />
+        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-4 text-center">
+          <div className="w-full max-w-[180px] overflow-hidden rounded-full bg-black/40">
+            <div
+              className="h-1 rounded-full bg-[#8ab4f8] transition-[width] duration-150"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="text-[11.5px] text-white/80">Uploading… {progress}%</p>
         </div>
-        <p className="text-[11.5px] text-[#9aa0a6]">Uploading… {progress}%</p>
       </div>
     );
   }

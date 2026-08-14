@@ -65,6 +65,9 @@ export type WidgetLayoutItem = {
   data?: Record<string, unknown>;
 };
 
+// Superseded by `widgets` below (one row per widget instead of one JSONB
+// blob per user+org) — kept as-is, unused by app code, purely as a
+// rollback/backup source until the new table's been live a while.
 export const widgetLayouts = pgTable(
   "widget_layouts",
   {
@@ -80,6 +83,41 @@ export const widgetLayouts = pgTable(
   },
   (table) => [
     uniqueIndex("widget_layouts_user_id_org_id_uidx").on(table.userId, table.organizationId),
+  ],
+);
+
+// One row per widget — repositioning/resizing one widget is a single-row
+// UPDATE instead of rewriting every widget's data back through one shared
+// JSONB array (widgetLayouts' actual bloat problem: moving any one widget
+// meant serializing and rewriting all of them).
+export const widgets = pgTable(
+  "widgets",
+  {
+    // True row identity — kept separate from `id` below because a handful
+    // of pinned default widgets (board-1, mail-summary-1, ...) reuse the
+    // same app-level id for every user, so `id` alone can't be a primary
+    // key without colliding across users.
+    pk: uuid("pk").defaultRandom().primaryKey(),
+    id: text("id").notNull(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    x: integer("x").notNull(),
+    y: integer("y").notNull(),
+    width: integer("width").notNull(),
+    // Null = auto-height (sizes to content until manually resized) — same
+    // meaning as WidgetLayoutItem["height"] being omitted.
+    height: integer("height"),
+    data: jsonb("data").$type<Record<string, unknown>>(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("widgets_id_org_user_uidx").on(table.id, table.organizationId, table.userId),
+    index("widgets_org_user_idx").on(table.organizationId, table.userId),
   ],
 );
 
@@ -130,14 +168,73 @@ export const docPages = pgTable(
   (table) => [index("doc_pages_doc_project_id_idx").on(table.docProjectId)],
 );
 
+export const albums = pgTable(
+  "albums",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [index("albums_organization_id_idx").on(table.organizationId)],
+);
+
+export const albumGroups = pgTable(
+  "album_groups",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    albumId: uuid("album_id")
+      .notNull()
+      .references(() => albums.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [index("album_groups_album_id_idx").on(table.albumId)],
+);
+
+export const albumImages = pgTable(
+  "album_images",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    albumId: uuid("album_id")
+      .notNull()
+      .references(() => albums.id, { onDelete: "cascade" }),
+    // Null = ungrouped — deleting a group falls its images back here rather
+    // than deleting them (see onDelete: "set null").
+    groupId: uuid("group_id").references(() => albumGroups.id, { onDelete: "set null" }),
+    url: text("url").notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    name: text("name"),
+    // Needed to delete the actual Cloudinary asset, not just this row —
+    // the DB has no way to reach into Cloudinary from a public URL alone.
+    cloudinaryPublicId: text("cloudinary_public_id"),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("album_images_album_id_created_at_idx").on(table.albumId, table.createdAt),
+    index("album_images_album_id_group_id_idx").on(table.albumId, table.groupId),
+  ],
+);
+
 const sql = neon(process.env.DATABASE_URL || "postgres://placeholder:placeholder@localhost/placeholder");
 
 export const db = drizzle(sql, {
   schema: {
     entries,
     widgetLayouts,
+    widgets,
     docProjects,
     docPages,
+    albums,
+    albumGroups,
+    albumImages,
     ...authSchema,
   },
 });

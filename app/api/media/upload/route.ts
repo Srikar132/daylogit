@@ -38,7 +38,10 @@ export async function POST(request: Request) {
     const resourceType = isVideo ? "video" : "image";
     const result = await cloudinary.uploader.upload(
       `data:${file.type};base64,${buffer.toString("base64")}`,
-      { resource_type: resourceType, folder: "helm-canvas" },
+      // Namespaced per-org — a flat shared folder had no tenant isolation
+      // (nothing stopped one workspace's assets from colliding with, or
+      // being enumerable alongside, another's under the same folder).
+      { resource_type: resourceType, folder: `helm-canvas/${identity.organizationId}` },
     );
 
     return NextResponse.json({
@@ -46,6 +49,7 @@ export async function POST(request: Request) {
       resourceType,
       width: result.width,
       height: result.height,
+      publicId: result.public_id,
     });
   } catch (err) {
     console.error("Cloudinary upload failed:", err);

@@ -1,7 +1,8 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, ListFilter, Search } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { EntryBoard } from "@/components/board/entry-board";
 import { addDaysIST, formatDateLabel, todayIST } from "@/lib/date";
 import type { BoardColumn } from "@/lib/worklog";
@@ -13,50 +14,53 @@ interface BoardWidgetProps {
 
 const SEARCH_DEBOUNCE_MS = 300;
 
+async function fetchBoard(date: string, search: string): Promise<{ columns: BoardColumn[] }> {
+  const params = new URLSearchParams({ date });
+  if (search.trim()) params.set("search", search.trim());
+  const res = await fetch(`/api/board?${params.toString()}`);
+  if (!res.ok) throw new Error(`Failed to load board (${res.status})`);
+  return res.json();
+}
+
 export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetProps) {
+  const queryClient = useQueryClient();
   const [date, setDate] = useState(todayIST());
   const [search, setSearch] = useState("");
-  const [columns, setColumns] = useState(initialColumns);
-  const [isLoading, setIsLoading] = useState(false);
-  // Bumped every time `columns` gets a genuinely new data set (a fetch
-  // resolves, or we reset back to the server-provided initial) — passed to
-  // EntryBoard as its `key`, so it remounts with fresh local state instead
-  // of needing an effect to resync a prop into state.
-  const [dataVersion, setDataVersion] = useState(0);
+  // Debounced separately from `search` (which drives the input directly) —
+  // this is what actually feeds the query key, so typing doesn't fire a
+  // request per keystroke.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchBoard = useCallback(async (targetDate: string, targetSearch: string) => {
-    setIsLoading(true);
-    try {
-      const params = new URLSearchParams({ date: targetDate });
-      if (targetSearch.trim()) params.set("search", targetSearch.trim());
-      const res = await fetch(`/api/board?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setColumns(data.columns);
-        setDataVersion((v) => v + 1);
-      }
-    } catch (err) {
-      console.error("Failed to load board", err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const isInitialQuery = date === todayIST() && !debouncedSearch.trim();
+  const queryKey = ["board", date, debouncedSearch];
+
+  const { data, isFetching, dataUpdatedAt } = useQuery({
+    queryKey,
+    queryFn: () => fetchBoard(date, debouncedSearch),
+    // Seeds the very first (today, no search) query with what the server
+    // already prefetched — every other date/search combo just fetches for
+    // real. Revisiting today afterward reads back from react-query's own
+    // cache instead of needing the old manual "reset to initialColumns"
+    // special case.
+    initialData: isInitialQuery ? { columns: initialColumns } : undefined,
+    staleTime: 30_000,
+  });
+
+  const columns = data?.columns ?? initialColumns;
 
   function goToDate(newDate: string) {
     setDate(newDate);
-    if (newDate === todayIST() && !search.trim()) {
-      setColumns(initialColumns);
-      setDataVersion((v) => v + 1);
-    } else {
-      fetchBoard(newDate, search);
-    }
   }
 
   function handleSearchChange(value: string) {
     setSearch(value);
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    searchDebounce.current = setTimeout(() => fetchBoard(date, value), SEARCH_DEBOUNCE_MS);
+    searchDebounce.current = setTimeout(() => setDebouncedSearch(value), SEARCH_DEBOUNCE_MS);
+  }
+
+  function handleRefresh() {
+    void queryClient.invalidateQueries({ queryKey });
   }
 
   return (
@@ -115,12 +119,12 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden">
         <EntryBoard
-          key={dataVersion}
+          key={dataUpdatedAt}
           initialColumns={columns}
-          onRefresh={() => fetchBoard(date, search)}
+          onRefresh={handleRefresh}
           canWrite={canWrite}
         />
-        {isLoading && (
+        {isFetching && (
           <div className="absolute inset-x-0 top-0 z-10 h-[2px] overflow-hidden bg-white/[0.04]">
             <div className="loading-sweep-bar h-full w-1/3 rounded-full bg-[#8ab4f8]" />
           </div>

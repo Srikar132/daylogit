@@ -1,29 +1,31 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { AlertCircle, Plug, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { revokeConnectionAction } from "@/lib/actions/connections";
+import { unwrapAction } from "@/lib/query-utils";
 
 type Connection = { clientId: string; name: string; icon: string | null; createdAt: Date };
 
 export function ConnectionsManager({ initialConnections }: { initialConnections: Connection[] }) {
   const [connections, setConnections] = useState(initialConnections);
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+
+  const revokeMutation = useMutation({
+    mutationFn: (clientId: string) => {
+      const fd = new FormData();
+      fd.set("clientId", clientId);
+      return unwrapAction(revokeConnectionAction({}, fd));
+    },
+    onSuccess: (_res, clientId) => setConnections((prev) => prev.filter((c) => c.clientId !== clientId)),
+    onError: (err) => setError(err.message),
+  });
 
   function handleRevoke(clientId: string) {
     setError(null);
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set("clientId", clientId);
-      const { error: revokeError } = await revokeConnectionAction({}, fd);
-      if (revokeError) {
-        setError(revokeError);
-        return;
-      }
-      setConnections((prev) => prev.filter((c) => c.clientId !== clientId));
-    });
+    revokeMutation.mutate(clientId);
   }
 
   return (
@@ -58,7 +60,7 @@ export function ConnectionsManager({ initialConnections }: { initialConnections:
               variant="destructive"
               size="icon-sm"
               onClick={() => handleRevoke(connection.clientId)}
-              disabled={isPending}
+              disabled={revokeMutation.isPending}
               title="Disconnect"
             >
               <Trash2 className="size-3.5" />

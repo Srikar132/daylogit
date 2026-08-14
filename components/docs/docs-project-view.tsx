@@ -14,7 +14,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import type { Editor } from "@tiptap/react";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { GlobalToolbar } from "@/components/docs/global-toolbar";
 import { PageSheet } from "@/components/docs/page-sheet";
 import {
@@ -25,6 +26,7 @@ import {
   type DocPageRow,
   type DocProjectSummary,
 } from "@/lib/actions/docs";
+import { unwrapAction } from "@/lib/query-utils";
 
 interface DocsProjectViewProps {
   /** Omitted for the public share view — there's no workspace to go back
@@ -44,7 +46,6 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
   const [activePageId, setActivePageId] = useState<string | null>(initialPages[0]?.id ?? null);
   const [isPublic, setIsPublic] = useState(project.isPublic);
   const [shareCopied, setShareCopied] = useState(false);
-  const [isPending, startTransition] = useTransition();
   // Sidebar is a slide-in drawer below md; the md:translate-x-0 override
   // means this state is only ever visually meaningful on small screens.
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -97,38 +98,49 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
     setSidebarOpen(false);
   }
 
-  function handleAddPage() {
-    startTransition(async () => {
-      const res = await createDocPage(project.id);
-      if (res.id) {
-        const newPage: DocPageRow = {
-          id: res.id,
-          docProjectId: project.id,
-          title: "Untitled",
-          content: null,
-          position: (pages.at(-1)?.position ?? -1) + 1,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        setPages((prev) => [...prev, newPage]);
-        pendingScrollToId.current = res.id;
-        setSidebarOpen(false);
-      }
-    });
-  }
+  const addPageMutation = useMutation({
+    mutationFn: () => unwrapAction(createDocPage(project.id)),
+    onSuccess: (res) => {
+      if (!res.id) return;
+      const newPage: DocPageRow = {
+        id: res.id,
+        docProjectId: project.id,
+        title: "Untitled",
+        content: null,
+        position: (pages.at(-1)?.position ?? -1) + 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      setPages((prev) => [...prev, newPage]);
+      pendingScrollToId.current = res.id;
+      setSidebarOpen(false);
+    },
+    onError: (err) => console.error("Failed to add page:", err),
+  });
 
-  async function handleDeletePage(id: string) {
-    if (pages.length <= 1) return;
-    const res = await deleteDocPage(id, project.id);
-    if (!res.error) {
+  const deletePageMutation = useMutation({
+    mutationFn: (id: string) => unwrapAction(deleteDocPage(id, project.id)),
+    onSuccess: (_res, id) => {
       pageRefs.current.delete(id);
       setPages((prev) => prev.filter((p) => p.id !== id));
-    }
+    },
+    onError: (err) => console.error("Failed to delete page:", err),
+  });
+
+  function handleDeletePage(id: string) {
+    if (pages.length <= 1) return;
+    deletePageMutation.mutate(id);
   }
+
+  const savePageMutation = useMutation({
+    mutationFn: (input: { pageId: string; patch: { title?: string; content?: Record<string, unknown> } }) =>
+      unwrapAction(updateDocPage(input.pageId, input.patch)),
+    onError: (err) => console.error("Failed to save page:", err),
+  });
 
   function handlePageContentChange(pageId: string, json: Record<string, unknown>) {
     setPages((prev) => prev.map((p) => (p.id === pageId ? { ...p, content: json } : p)));
-    void updateDocPage(pageId, { content: json });
+    savePageMutation.mutate({ pageId, patch: { content: json } });
   }
 
   const titleSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
@@ -141,16 +153,20 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
     timers.set(
       pageId,
       setTimeout(() => {
-        void updateDocPage(pageId, { title });
+        savePageMutation.mutate({ pageId, patch: { title } });
         timers.delete(pageId);
       }, 600),
     );
   }
 
-  async function handleShareToggle() {
-    const next = !isPublic;
-    const res = await setDocProjectPublic(project.id, next);
-    if (!res.error) setIsPublic(next);
+  const shareToggleMutation = useMutation({
+    mutationFn: (next: boolean) => unwrapAction(setDocProjectPublic(project.id, next)),
+    onSuccess: (_res, next) => setIsPublic(next),
+    onError: (err) => console.error("Failed to update sharing:", err),
+  });
+
+  function handleShareToggle() {
+    shareToggleMutation.mutate(!isPublic);
   }
 
   async function handleCopyShareLink() {
@@ -294,8 +310,8 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
           {canWrite && (
             <button
               type="button"
-              onClick={handleAddPage}
-              disabled={isPending}
+              onClick={() => addPageMutation.mutate()}
+              disabled={addPageMutation.isPending}
               className="flex items-center gap-1.5 border-t border-white/[0.06] px-3 py-2.5 text-[12.5px] text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed] cursor-pointer disabled:opacity-50"
             >
               <Plus className="h-3.5 w-3.5" /> Add page

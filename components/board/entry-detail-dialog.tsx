@@ -1,7 +1,7 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { FileWarning } from "lucide-react";
-import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { formatFullDate, formatTime } from "@/lib/date";
 import { parseEntrySummary, type ParsedLogItem } from "@/lib/summary-parser";
@@ -15,12 +15,13 @@ interface EntryDetailDialogProps {
   onClose: () => void;
 }
 
-// Keyed by the id it was fetched for, so a stale previous entry's result
-// never renders as if it were the current one while a new fetch is in flight.
-interface FetchResult {
-  id: string;
-  entry?: EntryRow;
-  error?: string;
+async function fetchEntry(entryId: string): Promise<EntryRow> {
+  const res = await fetch(`/api/entries/${entryId}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.error || "Failed to load this entry.");
+  }
+  return res.json();
 }
 
 /**
@@ -28,63 +29,34 @@ interface FetchResult {
  * Fetches the entry's full row (summary included) lazily via GET
  * /api/entries/[id]; the board's own list query never carries `summary` (see
  * lib/worklog.ts's EntryListItem), so this is the only place that data is
- * ever requested, and only for the one entry actually opened.
+ * ever requested, and only for the one entry actually opened. Cached per
+ * entry id — reopening the same entry within a session is instant.
  *
  * Rendering (edit/delete/comments, etc.) is intentionally out of scope here —
  * this is read-only for now, the rest is a follow-up.
  */
 export function EntryDetailDialog({ entryId, statusLabel, onClose }: EntryDetailDialogProps) {
-  const [result, setResult] = useState<FetchResult | null>(null);
+  const {
+    data: entry,
+    isLoading,
+    error,
+  } = useQuery({
+    queryKey: ["entry", entryId],
+    queryFn: () => fetchEntry(entryId!),
+    enabled: !!entryId,
+  });
 
-  useEffect(() => {
-    // No id means the dialog is closed (open={Boolean(entryId)}) — nothing
-    // renders, so there's nothing to fetch.
-    if (!entryId) return;
-
-    let cancelled = false;
-
-    fetch(`/api/entries/${entryId}`)
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => null);
-          throw new Error(body?.error || "Failed to load this entry.");
-        }
-        return (await res.json()) as EntryRow;
-      })
-      .then((entry) => {
-        if (!cancelled) setResult({ id: entryId, entry });
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setResult({
-            id: entryId,
-            error: err instanceof Error ? err.message : "Failed to load this entry.",
-          });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [entryId]);
-
-  // "Loading" is derived, not stored — true whenever the dialog is open but
-  // the last completed fetch (if any) doesn't match the currently open id.
-  const current = result && result.id === entryId ? result : null;
-  const isLoading = Boolean(entryId) && !current;
-
-  const items: ParsedLogItem[] =
-    current?.entry ? parseEntrySummary(current.entry.summary) : [];
+  const items: ParsedLogItem[] = entry ? parseEntrySummary(entry.summary) : [];
 
   return (
     <Dialog open={Boolean(entryId)} onOpenChange={(next) => !next && onClose()}>
       <DialogContent className="flex h-[min(600px,80vh)] w-[calc(100vw-2rem)] max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1e1e1e] p-0 shadow-2xl">
         {isLoading ? (
           <DetailSkeleton />
-        ) : current?.error ? (
-          <DetailError message={current.error} />
-        ) : current?.entry ? (
-          <DetailBody entry={current.entry} statusLabel={statusLabel} items={items} />
+        ) : error ? (
+          <DetailError message={error.message} />
+        ) : entry ? (
+          <DetailBody entry={entry} statusLabel={statusLabel} items={items} />
         ) : (
           <DetailError message="Something went wrong." />
         )}

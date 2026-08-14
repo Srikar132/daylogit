@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, AlertTriangle, Loader2, Mail, Pencil, Trash2, UserMinus, X } from "lucide-react";
 import {
   cancelInvitationAction,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/actions/members";
 import { deleteWorkspaceAction, renameWorkspaceAction } from "@/lib/actions/organization";
 import { ACCESS_LEVELS } from "@/lib/permissions";
+import { unwrapAction } from "@/lib/query-utils";
 
 type WorkspaceMembersData = Awaited<ReturnType<typeof getWorkspaceMembersData>>;
 type Member = WorkspaceMembersData["members"][number];
@@ -39,6 +41,7 @@ export function WorkspaceMembersManager({
   viewerUserId,
 }: WorkspaceMembersManagerProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [name, setName] = useState(organizationName);
   const [members, setMembers] = useState(initialMembers);
   const [invitations, setInvitations] = useState(initialInvitations);
@@ -46,85 +49,117 @@ export function WorkspaceMembersManager({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
 
-  function handleRename() {
-    setError(null);
-    startTransition(async () => {
+  // The workspace-settings canvas widget caches member/invitation data under
+  // this key — invalidating it after any of the mutations below means the
+  // widget shows fresh data next time, instead of whatever it had cached
+  // from before this settings page was even opened.
+  function invalidateMembers() {
+    void queryClient.invalidateQueries({ queryKey: ["workspaceMembers"] });
+  }
+
+  const renameMutation = useMutation({
+    mutationFn: () => {
       const fd = new FormData();
       fd.set("name", name.trim());
-      const result = await renameWorkspaceAction({}, fd);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
+      return unwrapAction(renameWorkspaceAction({}, fd));
+    },
+    onSuccess: () => {
       // The workspace switcher elsewhere on screen reads better-auth's own
       // client-side org cache, which this server action doesn't touch —
       // a soft refresh re-runs server components so this widget (and
       // anything else server-rendered) picks up the new name immediately.
       router.refresh();
-    });
+    },
+    onError: (err) => setError(err.message),
+  });
+
+  const inviteMutation = useMutation({
+    mutationFn: () => {
+      const fd = new FormData();
+      fd.set("email", email.trim());
+      fd.set("accessLevel", "view");
+      return unwrapAction(inviteMemberAction({}, fd));
+    },
+    onSuccess: async () => {
+      setEmail("");
+      const { invitations: fresh } = await listPendingInvitationsAction();
+      setInvitations(fresh);
+      invalidateMembers();
+    },
+    onError: (err) => setError(err.message),
+  });
+
+  const removeMemberMutation = useMutation({
+    mutationFn: (memberIdOrEmail: string) => {
+      const fd = new FormData();
+      fd.set("memberIdOrEmail", memberIdOrEmail);
+      return unwrapAction(removeMemberAction({}, fd));
+    },
+    onSuccess: (_res, memberIdOrEmail) => {
+      setMembers((prev) => prev.filter((m) => m.id !== memberIdOrEmail));
+      invalidateMembers();
+    },
+    onError: (err) => setError(err.message),
+  });
+
+  const cancelInviteMutation = useMutation({
+    mutationFn: (invitationId: string) => {
+      const fd = new FormData();
+      fd.set("invitationId", invitationId);
+      return unwrapAction(cancelInvitationAction({}, fd));
+    },
+    onSuccess: (_res, invitationId) => {
+      setInvitations((prev) => prev.filter((i) => i.id !== invitationId));
+      invalidateMembers();
+    },
+    onError: (err) => setError(err.message),
+  });
+
+  const deleteWorkspaceMutation = useMutation({
+    mutationFn: () => {
+      const fd = new FormData();
+      fd.set("confirmName", deleteConfirmText);
+      return unwrapAction(deleteWorkspaceAction({}, fd));
+    },
+    // Full navigation, not router.push — the org this page is scoped to no
+    // longer exists, so nothing here should try to re-render.
+    onSuccess: () => {
+      window.location.href = "/workspaces";
+    },
+    onError: (err) => setError(err.message),
+  });
+
+  const isPending =
+    renameMutation.isPending ||
+    inviteMutation.isPending ||
+    removeMemberMutation.isPending ||
+    cancelInviteMutation.isPending ||
+    deleteWorkspaceMutation.isPending;
+
+  function handleRename() {
+    setError(null);
+    renameMutation.mutate();
   }
 
   function handleInvite() {
     setError(null);
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set("email", email.trim());
-      fd.set("accessLevel", "view");
-      const result = await inviteMemberAction({}, fd);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setEmail("");
-      const { invitations: fresh } = await listPendingInvitationsAction();
-      setInvitations(fresh);
-    });
+    inviteMutation.mutate();
   }
 
   function handleRemoveMember(memberIdOrEmail: string) {
     setError(null);
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set("memberIdOrEmail", memberIdOrEmail);
-      const result = await removeMemberAction({}, fd);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setMembers((prev) => prev.filter((m) => m.id !== memberIdOrEmail));
-    });
+    removeMemberMutation.mutate(memberIdOrEmail);
   }
 
   function handleCancelInvite(invitationId: string) {
     setError(null);
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set("invitationId", invitationId);
-      const result = await cancelInvitationAction({}, fd);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setInvitations((prev) => prev.filter((i) => i.id !== invitationId));
-    });
+    cancelInviteMutation.mutate(invitationId);
   }
 
   function handleDelete() {
     setError(null);
-    startTransition(async () => {
-      const fd = new FormData();
-      fd.set("confirmName", deleteConfirmText);
-      const result = await deleteWorkspaceAction({}, fd);
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      // Full navigation, not router.push — the org this page is scoped to
-      // no longer exists, so nothing here should try to re-render.
-      window.location.href = "/workspaces";
-    });
+    deleteWorkspaceMutation.mutate();
   }
 
   return (

@@ -7,6 +7,7 @@ import { todayIST } from "@/lib/date";
 import { requireViewerContext } from "@/lib/workspace";
 import { getMyWidgetLayout } from "@/lib/actions/widgets";
 import { getDocProjectsByIds } from "@/lib/actions/docs";
+import { getAlbumPreviewsByIds } from "@/lib/actions/albums";
 import { getGmailStatus, getTodayMessages } from "@/lib/actions/gmail";
 import { getWorkspaceMembersData } from "@/lib/actions/members";
 
@@ -48,16 +49,22 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     getMyWidgetLayout(),
   ]);
 
-  // Every project-doc widget on the canvas used to fetch its own summary
-  // client-side on mount — N cards, N round-trips, every single load. Batch
-  // them all here instead, in parallel with the Gmail status check.
-  const projectDocIds = (initialLayout ?? [])
+  // Every project-doc/gallery widget on the canvas used to fetch its own
+  // summary client-side on mount — N cards, N round-trips, every single
+  // load. Batch them all here instead, in parallel with the Gmail status
+  // check.
+  const projectDocIds = initialLayout
     .filter((item) => item.type === "project-doc")
     .map((item) => (item.data as { docProjectId?: unknown } | undefined)?.docProjectId)
     .filter((id): id is string => typeof id === "string");
+  const albumIds = initialLayout
+    .filter((item) => item.type === "gallery")
+    .map((item) => (item.data as { albumId?: unknown } | undefined)?.albumId)
+    .filter((id): id is string => typeof id === "string");
 
-  const [initialProjectSummaries, initialGmailStatus, initialWorkspaceMembers] = await Promise.all([
+  const [initialProjectSummaries, initialAlbumPreviews, initialGmailStatus, initialWorkspaceMembers] = await Promise.all([
     getDocProjectsByIds(projectDocIds),
+    getAlbumPreviewsByIds(albumIds),
     getGmailStatus(),
     getWorkspaceMembersData(),
   ]);
@@ -74,6 +81,7 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
       canWrite={viewer.role !== "member"}
       initialLayout={initialLayout}
       initialProjectSummaries={initialProjectSummaries}
+      initialAlbumPreviews={initialAlbumPreviews}
       initialGmailStatus={initialGmailStatus}
       initialGmailMessages={initialGmailMessages}
       initialWorkspaceMembers={initialWorkspaceMembers}
