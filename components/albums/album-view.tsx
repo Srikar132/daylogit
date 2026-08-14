@@ -1,9 +1,22 @@
 "use client";
 
+import {
+  DndContext,
+  DragOverlay,
+  MouseSensor,
+  PointerSensor,
+  TouchSensor,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Folder, FolderPlus, ImagePlus, Images, Menu, X } from "lucide-react";
+import { ArrowLeft, CheckSquare, Folder, FolderPlus, ImagePlus, Images, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   createAlbumGroup,
   deleteAlbumGroup,
@@ -11,6 +24,7 @@ import {
   renameAlbumAction,
   renameAlbumGroup,
   type AlbumGroupRow,
+  type AlbumImageRow,
   type AlbumImagesPage,
   type AlbumRow,
 } from "@/lib/actions/albums";
@@ -18,8 +32,20 @@ import { unwrapAction } from "@/lib/query-utils";
 import { PhotoGrid } from "@/components/albums/photo-grid";
 import { UploadDropzone } from "@/components/albums/upload-dropzone";
 import { useAlbumUpload } from "@/components/albums/use-album-upload";
+import { useAlbumImageMutations } from "@/components/albums/use-album-image-mutations";
 import { Lightbox } from "@/components/albums/lightbox";
 import { BulkActionBar } from "@/components/albums/bulk-action-bar";
+import { MoveDuplicateDialog } from "@/components/albums/move-duplicate-dialog";
+
+/** "ungrouped" (the sidebar's built-in row) is a valid drop target that maps
+ *  to a real `groupId: null`, distinct from dnd-kit's droppable id string. */
+const UNGROUPED_DROP_ID = "ungrouped";
+
+interface PendingDrop {
+  imageIds: string[];
+  groupId: string | null;
+  groupName: string;
+}
 
 interface AlbumViewProps {
   slug: string;
@@ -44,9 +70,13 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
   const [groups, setGroups] = useState<AlbumGroupRow[]>(initialGroups);
   const [filter, setFilter] = useState<Filter>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null);
+  const [draggingImage, setDraggingImage] = useState<AlbumImageRow | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -157,6 +187,11 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
     setSidebarOpen(false);
   }
 
+  function toggleSelectionMode() {
+    setSelectionMode((v) => !v);
+    setSelectedIds(new Set());
+  }
+
   const { uploadFiles, pending, dismissPending } = useAlbumUpload(album.id, filterToGroupId(filter) ?? null, handleUploaded);
 
   function handleDrop(e: React.DragEvent) {
@@ -165,7 +200,73 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
     if (e.dataTransfer.files?.length) uploadFiles(e.dataTransfer.files);
   }
 
+  const { move, duplicate, bulkMove } = useAlbumImageMutations(invalidateAlbum);
+
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  );
+  const noSensors = useSensors();
+
+  function handleDragStart(event: DragStartEvent) {
+    const imageId = event.active.data.current?.imageId as string | undefined;
+    setDraggingImage(images.find((img) => img.id === imageId) ?? null);
+    // The group sidebar (the only drop targets) is hidden behind a toggle on
+    // mobile — without this, a drag on a narrow screen has nowhere to land.
+    setSidebarOpen(true);
+  }
+
+  function handleDragOver(event: { over: { id: string | number } | null }) {
+    setDropTargetId(event.over ? String(event.over.id) : null);
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setDropTargetId(null);
+    setDraggingImage(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const imageId = active.data.current?.imageId as string | undefined;
+    const sourceGroupId = (active.data.current?.groupId ?? null) as string | null;
+    if (!imageId) return;
+
+    const targetId = String(over.id);
+    const targetGroupId = targetId === UNGROUPED_DROP_ID ? null : targetId;
+    if (targetGroupId === sourceGroupId) return;
+
+    const isMultiDrag = selectedIds.has(imageId) && selectedIds.size > 1;
+    const imageIds = isMultiDrag ? [...selectedIds] : [imageId];
+    const groupName = targetGroupId ? groups.find((g) => g.id === targetGroupId)?.name ?? "group" : "Ungrouped";
+
+    setPendingDrop({ imageIds, groupId: targetGroupId, groupName });
+  }
+
+  function handleConfirmMove() {
+    if (!pendingDrop) return;
+    if (pendingDrop.imageIds.length > 1) {
+      bulkMove.mutate({ ids: pendingDrop.imageIds, groupId: pendingDrop.groupId });
+      setSelectedIds(new Set());
+    } else {
+      move.mutate({ id: pendingDrop.imageIds[0], groupId: pendingDrop.groupId });
+    }
+    setPendingDrop(null);
+  }
+
+  function handleConfirmDuplicate() {
+    if (!pendingDrop) return;
+    duplicate.mutate({ id: pendingDrop.imageIds[0], targetGroupId: pendingDrop.groupId });
+    setPendingDrop(null);
+  }
+
   return (
+    <DndContext
+      id="album-view"
+      sensors={canWrite ? dragSensors : noSensors}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragEnd={handleDragEnd}
+    >
     <div className="flex h-screen flex-col bg-[#1e1f20] text-[#e8eaed]">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-[#131314] px-3 sm:gap-3 sm:px-4">
         <button
@@ -195,6 +296,19 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
           <Images className="h-3 w-3" />
           {images.length}
         </span>
+
+        {images.length > 0 && (
+          <button
+            type="button"
+            onClick={toggleSelectionMode}
+            title="Select photos"
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full cursor-pointer ${
+              selectionMode ? "bg-[#8ab4f8]/15 text-[#8ab4f8]" : "text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed]"
+            }`}
+          >
+            <CheckSquare className="h-4 w-4" />
+          </button>
+        )}
 
         {canWrite && (
           <UploadDropzone
@@ -229,6 +343,8 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
               label="Ungrouped"
               active={filter === "ungrouped"}
               onClick={() => selectFilter("ungrouped")}
+              droppableId={canWrite ? UNGROUPED_DROP_ID : undefined}
+              isDropTarget={dropTargetId === UNGROUPED_DROP_ID}
             />
             <div className="mt-4 mb-1 px-2.5 text-[11px] font-medium uppercase tracking-wider text-[#5f6368]">
               Groups
@@ -242,6 +358,7 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
                 onClick={() => selectFilter(g.id)}
                 onRename={(newName) => handleRenameGroup(g.id, newName)}
                 onDelete={() => handleDeleteGroup(g.id, g.name)}
+                isDropTarget={dropTargetId === g.id}
               />
             ))}
           </div>
@@ -285,6 +402,7 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
             groups={groups}
             onRefresh={invalidateAlbum}
             isSwitching={isLoading}
+            selectionMode={selectionMode}
           />
         </div>
       </div>
@@ -310,7 +428,38 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
           onChanged={invalidateAlbum}
         />
       )}
+
+      {pendingDrop && (
+        <MoveDuplicateDialog
+          imageCount={pendingDrop.imageIds.length}
+          groupName={pendingDrop.groupName}
+          onMove={handleConfirmMove}
+          onDuplicate={handleConfirmDuplicate}
+          onOpenChange={(open) => {
+            if (!open) setPendingDrop(null);
+          }}
+        />
+      )}
     </div>
+
+    {typeof document !== "undefined" &&
+      createPortal(
+        <DragOverlay dropAnimation={null}>
+          {draggingImage ? (
+            <div className="relative h-24 w-24 overflow-hidden rounded-2xl border-2 border-[#8ab4f8] shadow-2xl">
+              {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary external Cloudinary domain */}
+              <img src={draggingImage.url} alt="" className="h-full w-full object-cover" />
+              {selectedIds.has(draggingImage.id) && selectedIds.size > 1 && (
+                <span className="absolute right-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#8ab4f8] px-1 text-[11px] font-semibold text-[#141414]">
+                  {selectedIds.size}
+                </span>
+              )}
+            </div>
+          ) : null}
+        </DragOverlay>,
+        document.body,
+      )}
+    </DndContext>
   );
 }
 
@@ -319,17 +468,28 @@ function SidebarRow({
   label,
   active,
   onClick,
+  droppableId,
+  isDropTarget,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   active: boolean;
   onClick: () => void;
+  droppableId?: string;
+  isDropTarget?: boolean;
 }) {
+  const { setNodeRef } = useDroppable({ id: droppableId ?? "", disabled: !droppableId });
+
   return (
     <div
+      ref={droppableId ? setNodeRef : undefined}
       onClick={onClick}
       className={`flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition-colors ${
-        active ? "bg-[#8ab4f8]/10 text-[#8ab4f8]" : "text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed]"
+        isDropTarget
+          ? "bg-[#8ab4f8]/20 ring-2 ring-[#8ab4f8]/60"
+          : active
+            ? "bg-[#8ab4f8]/10 text-[#8ab4f8]"
+            : "text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed]"
       }`}
     >
       <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -345,6 +505,7 @@ function GroupRow({
   onClick,
   onRename,
   onDelete,
+  isDropTarget,
 }: {
   group: AlbumGroupRow;
   active: boolean;
@@ -352,9 +513,11 @@ function GroupRow({
   onClick: () => void;
   onRename: (name: string) => void;
   onDelete: () => void;
+  isDropTarget?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(group.name);
+  const { setNodeRef } = useDroppable({ id: group.id, disabled: !canWrite });
 
   if (editing) {
     return (
@@ -382,10 +545,15 @@ function GroupRow({
 
   return (
     <div
+      ref={setNodeRef}
       onClick={onClick}
       onDoubleClick={() => canWrite && setEditing(true)}
       className={`group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition-colors ${
-        active ? "bg-[#8ab4f8]/10 text-[#8ab4f8]" : "text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed]"
+        isDropTarget
+          ? "bg-[#8ab4f8]/20 ring-2 ring-[#8ab4f8]/60"
+          : active
+            ? "bg-[#8ab4f8]/10 text-[#8ab4f8]"
+            : "text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed]"
       }`}
     >
       <Folder className="h-3.5 w-3.5 shrink-0" />

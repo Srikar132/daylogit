@@ -4,14 +4,21 @@ import { getRequestIdentity } from "@/lib/api-auth";
 import { canWriteEntries } from "@/lib/permissions";
 import { checkRateLimit } from "@/lib/rate-limit";
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-const MAX_BYTES = 25 * 1024 * 1024;
-
+// This endpoint no longer receives the file itself — it only issues a
+// short-lived signed set of upload params, and the client then POSTs the
+// file straight to Cloudinary. Proxying the whole file through this Next
+// server doubled bandwidth (client -> server -> Cloudinary) and held a
+// serverless function open for the entire upload duration; direct upload
+// means our server's involvement is a single small JSON round trip.
+//
+// Tradeoff: the file's real size/type is no longer checked server-side
+// (Cloudinary never tells us; we never see the bytes). The client still
+// checks both before starting the upload, same limits as before, but that's
+// bypassable by a modified client. The actual backstops are: this signature
+// is single-use (timestamp-bound, `checkRateLimit` caps how often one can be
+// issued) and scoped to the caller's own org folder — not open size/type
+// enforcement. Acceptable at this app's scale; revisit with an upload
+// preset (which Cloudinary can enforce server-side) if abuse ever shows up.
 export async function POST(request: Request) {
   const identity = await getRequestIdentity(request);
   if (!identity) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -24,41 +31,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: rateLimit.error }, { status: 429 });
   }
 
-  const formData = await request.formData();
-  const file = formData.get("file");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "No file provided." }, { status: 400 });
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  if (!apiSecret || !apiKey || !cloudName) {
+    console.error("Cloudinary env vars are not configured.");
+    return NextResponse.json({ error: "Upload isn't configured. Try again later." }, { status: 500 });
   }
 
-  const isImage = file.type.startsWith("image/");
-  const isVideo = file.type.startsWith("video/");
-  if (!isImage && !isVideo) {
-    return NextResponse.json({ error: "Only images and videos are supported." }, { status: 400 });
-  }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "File is too large (max 25MB)." }, { status: 400 });
-  }
+  const timestamp = Math.round(Date.now() / 1000);
+  // Namespaced per-org — a flat shared folder had no tenant isolation
+  // (nothing stopped one workspace's assets from colliding with, or being
+  // enumerable alongside, another's under the same folder).
+  const folder = `helm-canvas/${identity.organizationId}`;
 
-  try {
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const resourceType = isVideo ? "video" : "image";
-    const result = await cloudinary.uploader.upload(
-      `data:${file.type};base64,${buffer.toString("base64")}`,
-      // Namespaced per-org — a flat shared folder had no tenant isolation
-      // (nothing stopped one workspace's assets from colliding with, or
-      // being enumerable alongside, another's under the same folder).
-      { resource_type: resourceType, folder: `helm-canvas/${identity.organizationId}` },
-    );
+  // Every param the client sends alongside the file (other than file/
+  // api_key/cloud_name/signature itself) must be included here in the exact
+  // same form, or Cloudinary rejects the signature.
+  const signature = cloudinary.utils.api_sign_request({ timestamp, folder }, apiSecret);
 
-    return NextResponse.json({
-      url: result.secure_url,
-      resourceType,
-      width: result.width,
-      height: result.height,
-      publicId: result.public_id,
-    });
-  } catch (err) {
-    console.error("Cloudinary upload failed:", err);
-    return NextResponse.json({ error: "Upload failed. Try again." }, { status: 500 });
-  }
+  return NextResponse.json({ signature, timestamp, folder, apiKey, cloudName });
 }

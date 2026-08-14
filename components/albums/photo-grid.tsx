@@ -1,11 +1,20 @@
 "use client";
 
+import { useDraggable } from "@dnd-kit/core";
 import { motion } from "framer-motion";
-import { AlertCircle, Copy, Download, FolderInput, ImageOff, MoreHorizontal, Pencil, Trash2, X } from "lucide-react";
+import { AlertCircle, Copy, Download, FolderInput, FolderOutput, FolderX, ImageOff, MoreHorizontal, Pencil, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { PendingUpload } from "@/components/albums/use-album-upload";
 import { useAlbumImageMutations } from "@/components/albums/use-album-image-mutations";
 import type { AlbumGroupRow, AlbumImageRow } from "@/lib/actions/albums";
@@ -26,6 +35,9 @@ interface PhotoGridProps {
   /** True while a group-filter switch's fetch is in flight — shows skeleton
    *  tiles instead of a jarring blank grid between filters. */
   isSwitching: boolean;
+  /** Forces every tile's checkbox visible (not just on hover) — the only way
+   *  to discover/start bulk selection on touch devices, which have no hover. */
+  selectionMode: boolean;
 }
 
 export function PhotoGrid({
@@ -42,6 +54,7 @@ export function PhotoGrid({
   groups,
   onRefresh,
   isSwitching,
+  selectionMode,
 }: PhotoGridProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
 
@@ -95,7 +108,7 @@ export function PhotoGrid({
             key={img.id}
             image={img}
             selected={selectedIds.has(img.id)}
-            selectionActive={selectedIds.size > 0}
+            selectionActive={selectionMode || selectedIds.size > 0}
             canWrite={canWrite}
             groups={groups}
             onToggleSelect={() => onToggleSelect(img.id)}
@@ -162,6 +175,11 @@ function PhotoTile({
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(image.name ?? "");
   const { rename, duplicate, remove, move } = useAlbumImageMutations(onChanged);
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: image.id,
+    data: { type: "photo", imageId: image.id, groupId: image.groupId },
+    disabled: !canWrite,
+  });
 
   async function copyLink() {
     await navigator.clipboard.writeText(image.url);
@@ -185,8 +203,16 @@ function PhotoTile({
 
   return (
     <motion.div
-      whileHover={{ scale: 1.02 }}
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      whileHover={isDragging ? undefined : { scale: 1.02 }}
       transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      // No in-place transform here — the tile stays put and just dims. The
+      // actual moving thumbnail is DragOverlay (album-view.tsx), portalled to
+      // <body> so it isn't clipped by this grid's own overflow-y-auto once
+      // dragged past the container edge toward the sidebar.
+      style={{ opacity: isDragging ? 0.3 : 1, touchAction: "none" }}
       className="group relative aspect-square overflow-hidden rounded-2xl border border-white/[0.06] bg-[#131314] shadow-sm transition-shadow hover:shadow-lg hover:shadow-black/30"
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary external Cloudinary domain */}
@@ -194,6 +220,7 @@ function PhotoTile({
         src={image.url}
         alt={image.name ?? ""}
         onClick={handleClick}
+        draggable={false}
         className="h-full w-full cursor-pointer object-cover"
       />
 
@@ -236,18 +263,29 @@ function PhotoTile({
               <DropdownMenuItem onClick={download}>
                 <Download className="h-3.5 w-3.5" /> Download
               </DropdownMenuItem>
-              {groups.length > 0 && (
+              {groups.filter((g) => g.id !== image.groupId).length > 0 && (
                 <>
                   <div className="my-1 h-px bg-white/[0.06]" />
-                  {groups.map((g) => (
-                    <DropdownMenuItem key={g.id} onClick={() => move.mutate({ id: image.id, groupId: g.id })}>
-                      Move to {g.name}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuItem onClick={() => move.mutate({ id: image.id, groupId: null })}>
-                    Remove from group
-                  </DropdownMenuItem>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <FolderOutput className="h-3.5 w-3.5" /> Move to group
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      {groups
+                        .filter((g) => g.id !== image.groupId)
+                        .map((g) => (
+                          <DropdownMenuItem key={g.id} onClick={() => move.mutate({ id: image.id, groupId: g.id })}>
+                            {g.name}
+                          </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                 </>
+              )}
+              {image.groupId && (
+                <DropdownMenuItem onClick={() => move.mutate({ id: image.id, groupId: null })}>
+                  <FolderX className="h-3.5 w-3.5" /> Remove from group
+                </DropdownMenuItem>
               )}
               <div className="my-1 h-px bg-white/[0.06]" />
               <DropdownMenuItem

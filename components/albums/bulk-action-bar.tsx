@@ -59,7 +59,7 @@ export function BulkActionBar({ selectedIds, images, groups, onClear, onDone }: 
           <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-full bg-white/[0.06] px-3 py-1.5 text-[12px] text-[#e8eaed] hover:bg-white/10 cursor-pointer">
             <FolderInput className="h-3.5 w-3.5" /> Move
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
+          <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
             {groups.map((g) => (
               <DropdownMenuItem key={g.id} onClick={() => handleMove(g.id)}>
                 {g.name}

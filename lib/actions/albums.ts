@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { after } from "next/server";
 import { and, asc, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -49,7 +49,6 @@ export async function createAlbumAction(name: string): Promise<{ error?: string;
 
   if (!album) return { error: "Could not create the album. Please try again." };
 
-  revalidatePath("/workspace", "layout");
   return { id: album.id };
 }
 
@@ -66,7 +65,7 @@ export async function renameAlbumAction(id: string, name: string): Promise<Actio
   if (!owned) return { error: "Album not found." };
 
   await db.update(albums).set({ name: parsed.data, updatedAt: new Date() }).where(eq(albums.id, id));
-  revalidatePath("/workspace", "layout");
+  revalidateTag(`album:${id}`, { expire: 0 });
   return {};
 }
 
@@ -85,7 +84,9 @@ export async function deleteAlbumAction(id: string): Promise<ActionState> {
     .where(eq(albumImages.albumId, id));
 
   await db.delete(albums).where(eq(albums.id, id));
-  revalidatePath("/workspace", "layout");
+  revalidateTag(`album:${id}`, { expire: 0 });
+  revalidateTag(`album-groups:${id}`, { expire: 0 });
+  revalidateTag(`album-images:${id}`, { expire: 0 });
 
   // Best-effort, run after the response is sent — a slow or failing
   // Cloudinary call shouldn't hold up the delete the user is waiting on.
@@ -107,12 +108,19 @@ export async function getAlbumsForWorkspace(): Promise<AlbumRow[]> {
 
 export async function getAlbum(id: string): Promise<AlbumRow | null> {
   const viewer = await requireViewerContext();
-  const [row] = await db
-    .select()
-    .from(albums)
-    .where(and(eq(albums.id, id), eq(albums.organizationId, viewer.organizationId)))
-    .limit(1);
-  return row ?? null;
+  const organizationId = viewer.organizationId;
+  return unstable_cache(
+    async () => {
+      const [row] = await db
+        .select()
+        .from(albums)
+        .where(and(eq(albums.id, id), eq(albums.organizationId, organizationId)))
+        .limit(1);
+      return row ?? null;
+    },
+    ["album", id, organizationId],
+    { tags: [`album:${id}`], revalidate: 300 },
+  )();
 }
 
 /** Batched lookup for the canvas — one round trip for every gallery widget's
@@ -136,30 +144,44 @@ export async function getAlbumPreviewsByIds(ids: string[]): Promise<Record<strin
  *  regardless of how many images the album actually has. */
 export async function getAlbumPreview(albumId: string): Promise<AlbumPreview> {
   const viewer = await requireViewerContext();
-  const owned = await getOwnedAlbum(albumId, viewer.organizationId);
-  if (!owned) return { name: "", count: 0, images: [] };
+  const organizationId = viewer.organizationId;
+  return unstable_cache(
+    async () => {
+      const owned = await getOwnedAlbum(albumId, organizationId);
+      if (!owned) return { name: "", count: 0, images: [] };
 
-  const [images, [{ count }]] = await Promise.all([
-    db
-      .select()
-      .from(albumImages)
-      .where(eq(albumImages.albumId, albumId))
-      .orderBy(desc(albumImages.createdAt))
-      .limit(3),
-    db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(albumImages)
-      .where(eq(albumImages.albumId, albumId)),
-  ]);
+      const [images, [{ count }]] = await Promise.all([
+        db
+          .select()
+          .from(albumImages)
+          .where(eq(albumImages.albumId, albumId))
+          .orderBy(desc(albumImages.createdAt))
+          .limit(3),
+        db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(albumImages)
+          .where(eq(albumImages.albumId, albumId)),
+      ]);
 
-  return { name: owned.name, count, images };
+      return { name: owned.name, count, images };
+    },
+    ["album-preview", albumId, organizationId],
+    { tags: [`album:${albumId}`], revalidate: 300 },
+  )();
 }
 
 export async function getAlbumGroups(albumId: string): Promise<AlbumGroupRow[]> {
   const viewer = await requireViewerContext();
-  const owned = await getOwnedAlbum(albumId, viewer.organizationId);
-  if (!owned) return [];
-  return db.select().from(albumGroups).where(eq(albumGroups.albumId, albumId)).orderBy(asc(albumGroups.position));
+  const organizationId = viewer.organizationId;
+  return unstable_cache(
+    async () => {
+      const owned = await getOwnedAlbum(albumId, organizationId);
+      if (!owned) return [];
+      return db.select().from(albumGroups).where(eq(albumGroups.albumId, albumId)).orderBy(asc(albumGroups.position));
+    },
+    ["album-groups", albumId, organizationId],
+    { tags: [`album-groups:${albumId}`], revalidate: 300 },
+  )();
 }
 
 export async function createAlbumGroup(albumId: string, name: string): Promise<{ error?: string; id?: string }> {
@@ -185,7 +207,7 @@ export async function createAlbumGroup(albumId: string, name: string): Promise<{
     .values({ albumId, name: parsed.data, position: nextPosition })
     .returning({ id: albumGroups.id });
 
-  revalidatePath("/workspace", "layout");
+  revalidateTag(`album-groups:${albumId}`, { expire: 0 });
   return { id: group?.id };
 }
 
@@ -202,7 +224,7 @@ export async function renameAlbumGroup(id: string, albumId: string, name: string
   if (!owned) return { error: "Album not found." };
 
   await db.update(albumGroups).set({ name: parsed.data }).where(and(eq(albumGroups.id, id), eq(albumGroups.albumId, albumId)));
-  revalidatePath("/workspace", "layout");
+  revalidateTag(`album-groups:${albumId}`, { expire: 0 });
   return {};
 }
 
@@ -218,7 +240,8 @@ export async function deleteAlbumGroup(id: string, albumId: string): Promise<Act
   // Images in this group fall back to ungrouped via the FK's
   // onDelete: "set null" — deleting a group never deletes photos.
   await db.delete(albumGroups).where(and(eq(albumGroups.id, id), eq(albumGroups.albumId, albumId)));
-  revalidatePath("/workspace", "layout");
+  revalidateTag(`album-groups:${albumId}`, { expire: 0 });
+  revalidateTag(`album-images:${albumId}`, { expire: 0 });
   return {};
 }
 
@@ -258,7 +281,8 @@ export async function addImageToAlbum(
     })
     .returning({ id: albumImages.id });
 
-  revalidatePath("/workspace", "layout");
+  revalidateTag(`album-images:${parsed.data.albumId}`, { expire: 0 });
+  revalidateTag(`album:${parsed.data.albumId}`, { expire: 0 });
   return { id: image?.id };
 }
 
@@ -289,7 +313,7 @@ export async function renameImageAction(id: string, name: string): Promise<Actio
   if (!albumId) return { error: "Image not found." };
 
   await db.update(albumImages).set({ name: parsed.data || null }).where(eq(albumImages.id, id));
-  revalidatePath("/workspace", "layout");
+  revalidateTag(`album-images:${albumId}`, { expire: 0 });
   return {};
 }
 
@@ -309,7 +333,8 @@ export async function deleteImageAction(id: string): Promise<ActionState> {
   if (!owned) return { error: "Image not found." };
 
   await db.delete(albumImages).where(eq(albumImages.id, id));
-  revalidatePath("/workspace", "layout");
+  revalidateTag(`album-images:${row.albumId}`, { expire: 0 });
+  revalidateTag(`album:${row.albumId}`, { expire: 0 });
 
   if (row.cloudinaryPublicId) {
     const publicId = row.cloudinaryPublicId;
@@ -329,7 +354,7 @@ export async function moveImageToGroupAction(id: string, groupId: string | null)
   if (!albumId) return { error: "Image not found." };
 
   await db.update(albumImages).set({ groupId }).where(eq(albumImages.id, id));
-  revalidatePath("/workspace", "layout");
+  revalidateTag(`album-images:${albumId}`, { expire: 0 });
   return {};
 }
 
@@ -360,7 +385,8 @@ export async function copyImageAction(id: string, targetGroupId?: string | null)
     })
     .returning({ id: albumImages.id });
 
-  revalidatePath("/workspace", "layout");
+  revalidateTag(`album-images:${row.albumId}`, { expire: 0 });
+  revalidateTag(`album:${row.albumId}`, { expire: 0 });
   return { id: copy?.id };
 }
 
@@ -386,7 +412,10 @@ export async function bulkDeleteImagesAction(ids: string[]): Promise<ActionState
   if (deletable.length === 0) return {};
 
   await db.delete(albumImages).where(inArray(albumImages.id, deletable.map((r) => r.id)));
-  revalidatePath("/workspace", "layout");
+  for (const affectedAlbumId of new Set(deletable.map((r) => r.albumId))) {
+    revalidateTag(`album-images:${affectedAlbumId}`, { expire: 0 });
+    revalidateTag(`album:${affectedAlbumId}`, { expire: 0 });
+  }
 
   const publicIds = deletable.map((r) => r.cloudinaryPublicId).filter((id): id is string => !!id);
   if (publicIds.length > 0) {
@@ -410,11 +439,13 @@ export async function bulkMoveImagesAction(ids: string[], groupId: string | null
     .from(albums)
     .where(and(inArray(albums.id, albumIds), eq(albums.organizationId, viewer.organizationId)));
   const ownedSet = new Set(ownedAlbums.map((a) => a.id));
-  const movable = rows.filter((r) => ownedSet.has(r.albumId)).map((r) => r.id);
-  if (movable.length === 0) return {};
+  const movableRows = rows.filter((r) => ownedSet.has(r.albumId));
+  if (movableRows.length === 0) return {};
 
-  await db.update(albumImages).set({ groupId }).where(inArray(albumImages.id, movable));
-  revalidatePath("/workspace", "layout");
+  await db.update(albumImages).set({ groupId }).where(inArray(albumImages.id, movableRows.map((r) => r.id)));
+  for (const affectedAlbumId of new Set(movableRows.map((r) => r.albumId))) {
+    revalidateTag(`album-images:${affectedAlbumId}`, { expire: 0 });
+  }
   return {};
 }
 
@@ -427,37 +458,44 @@ export async function getAlbumImages(
   opts: { groupId?: string | null; cursor?: string | null; limit?: number } = {},
 ): Promise<AlbumImagesPage> {
   const viewer = await requireViewerContext();
-  const owned = await getOwnedAlbum(albumId, viewer.organizationId);
-  if (!owned) return { images: [], nextCursor: null };
+  const organizationId = viewer.organizationId;
+  return unstable_cache(
+    async () => {
+      const owned = await getOwnedAlbum(albumId, organizationId);
+      if (!owned) return { images: [], nextCursor: null };
 
-  const limit = Math.min(opts.limit ?? 60, 120);
-  const conditions = [eq(albumImages.albumId, albumId)];
-  if (opts.groupId === null) conditions.push(sql`${albumImages.groupId} is null`);
-  else if (opts.groupId) conditions.push(eq(albumImages.groupId, opts.groupId));
+      const limit = Math.min(opts.limit ?? 60, 120);
+      const conditions = [eq(albumImages.albumId, albumId)];
+      if (opts.groupId === null) conditions.push(sql`${albumImages.groupId} is null`);
+      else if (opts.groupId) conditions.push(eq(albumImages.groupId, opts.groupId));
 
-  if (opts.cursor) {
-    const [cursorCreatedAt, cursorId] = opts.cursor.split(",");
-    if (cursorCreatedAt && cursorId) {
-      conditions.push(
-        or(
-          lt(albumImages.createdAt, new Date(cursorCreatedAt)),
-          and(eq(albumImages.createdAt, new Date(cursorCreatedAt)), lt(albumImages.id, cursorId)),
-        )!,
-      );
-    }
-  }
+      if (opts.cursor) {
+        const [cursorCreatedAt, cursorId] = opts.cursor.split(",");
+        if (cursorCreatedAt && cursorId) {
+          conditions.push(
+            or(
+              lt(albumImages.createdAt, new Date(cursorCreatedAt)),
+              and(eq(albumImages.createdAt, new Date(cursorCreatedAt)), lt(albumImages.id, cursorId)),
+            )!,
+          );
+        }
+      }
 
-  const rows = await db
-    .select()
-    .from(albumImages)
-    .where(and(...conditions))
-    .orderBy(desc(albumImages.createdAt), desc(albumImages.id))
-    .limit(limit + 1);
+      const rows = await db
+        .select()
+        .from(albumImages)
+        .where(and(...conditions))
+        .orderBy(desc(albumImages.createdAt), desc(albumImages.id))
+        .limit(limit + 1);
 
-  const hasMore = rows.length > limit;
-  const images = hasMore ? rows.slice(0, limit) : rows;
-  const last = images.at(-1);
-  const nextCursor = hasMore && last ? `${last.createdAt.toISOString()},${last.id}` : null;
+      const hasMore = rows.length > limit;
+      const images = hasMore ? rows.slice(0, limit) : rows;
+      const last = images.at(-1);
+      const nextCursor = hasMore && last ? `${last.createdAt.toISOString()},${last.id}` : null;
 
-  return { images, nextCursor };
+      return { images, nextCursor };
+    },
+    ["album-images", albumId, organizationId, String(opts.groupId), opts.cursor ?? "", String(opts.limit ?? "")],
+    { tags: [`album-images:${albumId}`], revalidate: 300 },
+  )();
 }

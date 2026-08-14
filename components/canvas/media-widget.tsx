@@ -10,20 +10,14 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toastManager } from "@/lib/toast";
+import { uploadToCloudinary } from "@/lib/upload-client";
 
 interface MediaWidgetProps {
   id: string;
   data?: Record<string, unknown>;
   canWrite: boolean;
 }
-
-type UploadResponse = {
-  url?: string;
-  resourceType?: "image" | "video";
-  width?: number;
-  height?: number;
-  error?: string;
-};
 
 type MediaData =
   | { status: "uploading" }
@@ -62,41 +56,19 @@ export function MediaWidget({ id, data, canWrite }: MediaWidgetProps) {
 
   function upload(file: File) {
     setProgress(0);
-    const xhr = new XMLHttpRequest();
-    const formData = new FormData();
-    formData.append("file", file);
-
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
-    };
-    xhr.onload = () => {
-      let payload: UploadResponse = {};
-      try {
-        payload = JSON.parse(xhr.responseText);
-      } catch {
-        payload = { error: "Upload failed. Try again." };
-      }
-      if (xhr.status >= 200 && xhr.status < 300 && payload.url) {
+    uploadToCloudinary(file, setProgress)
+      .then((result) => {
         clearPendingFile(id);
-        updateWidgetData(id, {
-          status: "ready",
-          url: payload.url,
-          resourceType: payload.resourceType ?? "image",
-        });
-        if (payload.width && payload.height) {
-          resizeWidget(id, fitToAspect(payload.width, payload.height));
+        updateWidgetData(id, { status: "ready", url: result.url, resourceType: result.resourceType });
+        if (result.width && result.height) {
+          resizeWidget(id, fitToAspect(result.width, result.height));
         }
-      } else {
+      })
+      .catch((err: Error) => {
         startedRef.current = false;
-        updateWidgetData(id, { status: "error", message: payload.error ?? "Upload failed. Try again." });
-      }
-    };
-    xhr.onerror = () => {
-      startedRef.current = false;
-      updateWidgetData(id, { status: "error", message: "Network error during upload." });
-    };
-    xhr.open("POST", "/api/media/upload");
-    xhr.send(formData);
+        updateWidgetData(id, { status: "error", message: err.message });
+        toastManager.add({ title: "Upload failed", description: err.message, type: "error" });
+      });
   }
 
   useEffect(() => {

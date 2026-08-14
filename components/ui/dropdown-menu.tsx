@@ -8,6 +8,41 @@ import { cn } from "@/lib/utils";
 const DropdownMenu = MenuPrimitive.Root;
 const DropdownMenuTrigger = MenuPrimitive.Trigger;
 const DropdownMenuPortal = MenuPrimitive.Portal;
+const DropdownMenuSub = MenuPrimitive.SubmenuRoot;
+
+function DropdownMenuSubTrigger({ className, children, ...props }: MenuPrimitive.SubmenuTrigger.Props) {
+  return (
+    <MenuPrimitive.SubmenuTrigger
+      data-slot="dropdown-menu-sub-trigger"
+      className={cn(
+        "flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#e8eaed] outline-none select-none data-highlighted:bg-white/[0.06] data-popup-open:bg-white/[0.06]",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </MenuPrimitive.SubmenuTrigger>
+  );
+}
+
+function DropdownMenuSubContent({ className, children, ...props }: MenuPrimitive.Popup.Props) {
+  return (
+    <DropdownMenuPortal>
+      <MenuPrimitive.Positioner side="right" align="start" sideOffset={4}>
+        <MenuPrimitive.Popup
+          data-slot="dropdown-menu-sub-content"
+          className={cn(
+            "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 max-h-64 min-w-40 overflow-y-auto scrollbar-thin rounded-xl border border-white/[0.08] bg-[#131314] p-1 shadow-2xl outline-none",
+            className,
+          )}
+          {...props}
+        >
+          {children}
+        </MenuPrimitive.Popup>
+      </MenuPrimitive.Positioner>
+    </DropdownMenuPortal>
+  );
+}
 
 function DropdownMenuContent({
   className,
@@ -53,4 +88,12 @@ function DropdownMenuItem({
   );
 }
 
-export { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem };
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+};

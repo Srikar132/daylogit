@@ -4,22 +4,15 @@ import { useMutation } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { addImageToAlbum, type AlbumImageRow } from "@/lib/actions/albums";
 import { unwrapAction } from "@/lib/query-utils";
-
-type UploadResponse = {
-  url?: string;
-  width?: number;
-  height?: number;
-  publicId?: string;
-  error?: string;
-};
+import { toastManager } from "@/lib/toast";
+import { uploadToCloudinary } from "@/lib/upload-client";
 
 export type PendingUpload = { id: string; progress: number; error?: string };
 
-/** Same XHR-with-progress upload against /api/media/upload as media-widget's
- *  upload() — reused as-is rather than duplicated, just followed by an
- *  addImageToAlbum call to attach the result to this album/group. Exposes
- *  per-file progress/error so the grid can render a real placeholder tile
- *  instead of uploads happening invisibly in the background. */
+/** Uploads straight to Cloudinary (see lib/upload-client.ts — no file bytes
+ *  proxied through our server), then attaches the result to this album/group.
+ *  Exposes per-file progress/error so the grid can render a real placeholder
+ *  tile instead of uploads happening invisibly in the background. */
 export function useAlbumUpload(albumId: string, groupId: string | null, onUploaded: (image: AlbumImageRow) => void) {
   const [pending, setPending] = useState<PendingUpload[]>([]);
   const nextId = useRef(0);
@@ -32,32 +25,17 @@ export function useAlbumUpload(albumId: string, groupId: string | null, onUpload
     const localId = `pending-${nextId.current++}`;
     setPending((prev) => [{ id: localId, progress: 0 }, ...prev]);
 
-    const xhr = new XMLHttpRequest();
-    const formData = new FormData();
-    formData.append("file", file);
-
-    xhr.upload.onprogress = (e) => {
-      if (!e.lengthComputable) return;
-      const progress = Math.round((e.loaded / e.total) * 100);
+    uploadToCloudinary(file, (progress) => {
       setPending((prev) => prev.map((p) => (p.id === localId ? { ...p, progress } : p)));
-    };
-
-    xhr.onload = () => {
-      let payload: UploadResponse = {};
-      try {
-        payload = JSON.parse(xhr.responseText);
-      } catch {
-        payload = { error: "Upload failed." };
-      }
-      if (xhr.status >= 200 && xhr.status < 300 && payload.url) {
-        const url = payload.url;
+    })
+      .then((result) => {
         attachMutation.mutate(
           {
             albumId,
-            url,
-            width: payload.width,
-            height: payload.height,
-            cloudinaryPublicId: payload.publicId,
+            url: result.url,
+            width: result.width,
+            height: result.height,
+            cloudinaryPublicId: result.publicId,
             groupId: groupId ?? undefined,
           },
           {
@@ -68,30 +46,28 @@ export function useAlbumUpload(albumId: string, groupId: string | null, onUpload
                   id: res.id,
                   albumId,
                   groupId,
-                  url,
-                  width: payload.width ?? null,
-                  height: payload.height ?? null,
+                  url: result.url,
+                  width: result.width ?? null,
+                  height: result.height ?? null,
                   name: null,
-                  cloudinaryPublicId: payload.publicId ?? null,
+                  cloudinaryPublicId: result.publicId ?? null,
                   createdBy: null,
                   createdAt: new Date(),
                 });
+                toastManager.add({ title: `${file.name} uploaded`, type: "success" });
               }
             },
             onError: (err) => {
               setPending((prev) => prev.map((p) => (p.id === localId ? { ...p, error: err.message } : p)));
+              toastManager.add({ title: `${file.name} failed to attach`, description: err.message, type: "error" });
             },
           },
         );
-      } else {
-        setPending((prev) => prev.map((p) => (p.id === localId ? { ...p, error: payload.error ?? "Upload failed." } : p)));
-      }
-    };
-    xhr.onerror = () => {
-      setPending((prev) => prev.map((p) => (p.id === localId ? { ...p, error: "Network error." } : p)));
-    };
-    xhr.open("POST", "/api/media/upload");
-    xhr.send(formData);
+      })
+      .catch((err: Error) => {
+        setPending((prev) => prev.map((p) => (p.id === localId ? { ...p, error: err.message } : p)));
+        toastManager.add({ title: `${file.name} failed to upload`, description: err.message, type: "error" });
+      });
   }
 
   function uploadFiles(files: FileList | File[]) {

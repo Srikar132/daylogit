@@ -168,20 +168,24 @@ function LightboxActionBar({
           <LightboxAction icon={FolderInput} label="Duplicate" onClick={() => duplicate.mutate({ id: image.id })} />
           <LightboxAction icon={Copy} label="Copy link" onClick={onCopyLink} />
           <LightboxAction icon={Download} label="Download" onClick={onDownload} />
-          {groups.length > 0 && (
+          {(groups.filter((g) => g.id !== image.groupId).length > 0 || image.groupId) && (
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[12px] text-white hover:bg-white/20 cursor-pointer">
                 <FolderInput className="h-3.5 w-3.5" /> Move
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start">
-                {groups.map((g) => (
-                  <DropdownMenuItem key={g.id} onClick={() => move.mutate({ id: image.id, groupId: g.id })}>
-                    {g.name}
+              <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
+                {groups
+                  .filter((g) => g.id !== image.groupId)
+                  .map((g) => (
+                    <DropdownMenuItem key={g.id} onClick={() => move.mutate({ id: image.id, groupId: g.id })}>
+                      {g.name}
+                    </DropdownMenuItem>
+                  ))}
+                {image.groupId && (
+                  <DropdownMenuItem onClick={() => move.mutate({ id: image.id, groupId: null })}>
+                    Ungrouped
                   </DropdownMenuItem>
-                ))}
-                <DropdownMenuItem onClick={() => move.mutate({ id: image.id, groupId: null })}>
-                  Ungrouped
-                </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}

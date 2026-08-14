@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { useState } from "react";
+import { Toaster } from "@/components/ui/toast";
 
 // Bump this whenever a persisted query's shape changes incompatibly — it
 // invalidates every previously-persisted cache instead of a client hydrating
@@ -82,6 +83,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+      <Toaster />
       {process.env.NODE_ENV === "development" && <ReactQueryDevtools initialIsOpen={false} />}
     </PersistQueryClientProvider>
   );
