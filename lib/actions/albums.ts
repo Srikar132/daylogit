@@ -7,7 +7,7 @@ import { z } from "zod";
 import { db, albums, albumGroups, albumImages } from "@/lib/db";
 import { requireViewerContext } from "@/lib/workspace";
 import { canWriteEntries } from "@/lib/permissions";
-import { cloudinary } from "@/lib/cloudinary";
+import { enqueueCloudinaryCleanup, runCleanupJobs } from "@/lib/cloudinary-cleanup";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export type ActionState = { error?: string };
@@ -88,14 +88,14 @@ export async function deleteAlbumAction(id: string): Promise<ActionState> {
   revalidateTag(`album-groups:${id}`, { expire: 0 });
   revalidateTag(`album-images:${id}`, { expire: 0 });
 
-  // Best-effort, run after the response is sent — a slow or failing
-  // Cloudinary call shouldn't hold up the delete the user is waiting on.
-  // Worst case is an orphaned asset, not a stuck delete. `after()` (not a
-  // bare fire-and-forget) keeps this running past the point the function
-  // would otherwise be frozen once the response goes out.
+  // The DB row for each cleanup job is written NOW (durable), before the
+  // response goes out — the after() call below is just the fast path.
+  // Cloudinary getting deleted a few minutes later via the cron sweep is
+  // fine; a delete that never gets recorded at all is not.
   const publicIds = images.map((img) => img.cloudinaryPublicId).filter((id): id is string => !!id);
   if (publicIds.length > 0) {
-    after(() => Promise.all(publicIds.map((publicId) => cloudinary.uploader.destroy(publicId).catch(() => undefined))));
+    const jobs = await enqueueCloudinaryCleanup(publicIds);
+    after(() => runCleanupJobs(jobs));
   }
 
   return {};
@@ -337,8 +337,8 @@ export async function deleteImageAction(id: string): Promise<ActionState> {
   revalidateTag(`album:${row.albumId}`, { expire: 0 });
 
   if (row.cloudinaryPublicId) {
-    const publicId = row.cloudinaryPublicId;
-    after(() => cloudinary.uploader.destroy(publicId).catch(() => undefined));
+    const jobs = await enqueueCloudinaryCleanup([row.cloudinaryPublicId]);
+    after(() => runCleanupJobs(jobs));
   }
 
   return {};
@@ -419,7 +419,8 @@ export async function bulkDeleteImagesAction(ids: string[]): Promise<ActionState
 
   const publicIds = deletable.map((r) => r.cloudinaryPublicId).filter((id): id is string => !!id);
   if (publicIds.length > 0) {
-    after(() => Promise.all(publicIds.map((publicId) => cloudinary.uploader.destroy(publicId).catch(() => undefined))));
+    const jobs = await enqueueCloudinaryCleanup(publicIds);
+    after(() => runCleanupJobs(jobs));
   }
 
   return {};

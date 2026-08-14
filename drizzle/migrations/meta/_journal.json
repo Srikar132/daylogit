@@ -85,6 +85,13 @@
       "when": 1786719986863,
       "tag": "0011_absent_mulholland_black",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786731860140,
+      "tag": "0012_nasty_wolfsbane",
+      "breakpoints": true
     }
   ]
 }

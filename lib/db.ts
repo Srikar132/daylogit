@@ -223,6 +223,28 @@ export const albumImages = pgTable(
   ],
 );
 
+export const cloudinaryCleanupStatusEnum = pgEnum("cloudinary_cleanup_status", ["pending", "done", "failed"]);
+
+// Durable record of "this Cloudinary asset needs to be destroyed" — created
+// synchronously in the same request that deletes the owning DB row, so the
+// cleanup survives even if the best-effort after() attempt (see
+// lib/actions/albums.ts) never runs (frozen function, Cloudinary outage,
+// etc). The cron sweep (app/api/cron/cloudinary-cleanup/route.ts) is what
+// actually guarantees delivery, not the after() call.
+export const cloudinaryCleanupJobs = pgTable(
+  "cloudinary_cleanup_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    publicId: text("public_id").notNull(),
+    status: cloudinaryCleanupStatusEnum("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [index("cloudinary_cleanup_jobs_status_idx").on(table.status, table.createdAt)],
+);
+
 const sql = neon(process.env.DATABASE_URL || "postgres://placeholder:placeholder@localhost/placeholder");
 
 export const db = drizzle(sql, {
@@ -235,6 +257,7 @@ export const db = drizzle(sql, {
     albums,
     albumGroups,
     albumImages,
+    cloudinaryCleanupJobs,
     ...authSchema,
   },
 });
