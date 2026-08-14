@@ -4,7 +4,7 @@ import { FileWarning } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { formatFullDate, formatTime } from "@/lib/date";
-import { parseWorklogSummary, type ParsedLogItem } from "@/lib/summary-parser";
+import { parseEntrySummary, type ParsedLogItem } from "@/lib/summary-parser";
 import type { EntryRow } from "@/lib/worklog";
 
 interface EntryDetailDialogProps {
@@ -74,7 +74,7 @@ export function EntryDetailDialog({ entryId, statusLabel, onClose }: EntryDetail
   const isLoading = Boolean(entryId) && !current;
 
   const items: ParsedLogItem[] =
-    current?.entry ? parseWorklogSummary(current.entry.summary) : [];
+    current?.entry ? parseEntrySummary(current.entry.summary) : [];
 
   return (
     <Dialog open={Boolean(entryId)} onOpenChange={(next) => !next && onClose()}>

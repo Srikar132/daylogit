@@ -71,7 +71,7 @@ function parseBlock(block: string): ParsedLogItem {
  * and never drops content — an empty/whitespace-only summary returns an
  * empty array, everything else returns at least one item.
  */
-export function parseWorklogSummary(summary: string): ParsedLogItem[] {
+export function parseEntrySummary(summary: string): ParsedLogItem[] {
   const trimmed = summary.trim();
   if (!trimmed) return [];
   return splitBlocks(trimmed).map(parseBlock);
@@ -79,5 +79,5 @@ export function parseWorklogSummary(summary: string): ParsedLogItem[] {
 
 /** True if at least one block in the summary matched the structured task/what-done format. */
 export function isStructuredSummary(summary: string): boolean {
-  return parseWorklogSummary(summary).some((item) => item.task && item.whatDone);
+  return parseEntrySummary(summary).some((item) => item.task && item.whatDone);
 }

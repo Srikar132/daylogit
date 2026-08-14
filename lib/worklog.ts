@@ -21,7 +21,7 @@ export type EntryListItem = Pick<
 const SUMMARY_PREVIEW_LENGTH = 200;
 const DASHBOARD_WINDOW_DAYS = 30;
 
-export class WorklogError extends Error {}
+export class EntryError extends Error {}
 
 /** Create a new independent log entry row (no merging, no upsert). Lands in "todo"/"task" unless given. */
 export async function createOrAppendEntry(
@@ -37,7 +37,7 @@ export async function createOrAppendEntry(
   },
 ): Promise<EntryRow> {
   if (isFillerSummary(input.summary)) {
-    throw new WorklogError(
+    throw new EntryError(
       "Summary is too short or too generic. Be specific about what was done.",
     );
   }
@@ -232,7 +232,7 @@ export async function updateEntry(
   },
 ): Promise<EntryRow> {
   if (patch.summary !== undefined && isFillerSummary(patch.summary)) {
-    throw new WorklogError(
+    throw new EntryError(
       "Summary is too short or too generic. Be specific about what was done.",
     );
   }
@@ -254,7 +254,7 @@ export async function updateEntry(
     .returning();
 
   if (!row) {
-    throw new WorklogError(`No active entry found with id ${id}.`);
+    throw new EntryError(`No active entry found with id ${id}.`);
   }
 
   return row;
@@ -279,7 +279,7 @@ export async function updateEntryStatus(
     .returning();
 
   if (!row) {
-    throw new WorklogError(`Entry not found: ${id}`);
+    throw new EntryError(`Entry not found: ${id}`);
   }
 
   return row;

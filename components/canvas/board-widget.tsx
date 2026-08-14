@@ -2,7 +2,7 @@
 
 import { ChevronLeft, ChevronRight, ListFilter, Search } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
-import { WorklogBoard } from "@/components/board/worklog-board";
+import { EntryBoard } from "@/components/board/entry-board";
 import { addDaysIST, formatDateLabel, todayIST } from "@/lib/date";
 import type { BoardColumn } from "@/lib/worklog";
 
@@ -20,7 +20,7 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
   const [isLoading, setIsLoading] = useState(false);
   // Bumped every time `columns` gets a genuinely new data set (a fetch
   // resolves, or we reset back to the server-provided initial) — passed to
-  // WorklogBoard as its `key`, so it remounts with fresh local state instead
+  // EntryBoard as its `key`, so it remounts with fresh local state instead
   // of needing an effect to resync a prop into state.
   const [dataVersion, setDataVersion] = useState(0);
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -114,7 +114,7 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
         </button>
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden">
-        <WorklogBoard
+        <EntryBoard
           key={dataVersion}
           initialColumns={columns}
           onRefresh={() => fetchBoard(date, search)}

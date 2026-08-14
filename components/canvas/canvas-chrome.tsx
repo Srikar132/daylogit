@@ -26,8 +26,16 @@ function WorkspaceSwitcher() {
   const [open, setOpen] = useState(false);
   const ref = useClickOutside(() => setOpen(false));
 
-  function switchTo(slug: string) {
+  async function switchTo(organizationId: string, slug: string) {
     setOpen(false);
+    // useActiveOrganization()'s cache only invalidates when the active org
+    // changes through the client SDK (this call) — the server-side
+    // setActiveOrganization in app/workspace/[slug]/page.tsx runs during the
+    // next render and keeps direct/bookmarked URLs correct, but doesn't
+    // tell this already-mounted component anything changed, which is why
+    // the switcher kept showing the previous workspace's name after a
+    // client-side navigation.
+    await authClient.organization.setActive({ organizationId });
     router.push(`/workspace/${slug}`);
   }
 
@@ -54,7 +62,7 @@ function WorkspaceSwitcher() {
               <button
                 key={org.id}
                 type="button"
-                onClick={() => switchTo(org.slug)}
+                onClick={() => switchTo(org.id, org.slug)}
                 className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] text-[#e8eaed] hover:bg-white/5 cursor-pointer"
               >
                 <span className="flex-1 truncate">{org.name}</span>

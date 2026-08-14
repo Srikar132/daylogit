@@ -24,13 +24,13 @@ import { STATUS_COLUMNS, STATUS_LABEL } from "@/lib/constants";
 import type { TaskStatus } from "@/lib/db";
 import type { BoardColumn, EntryListItem } from "@/lib/worklog";
 
-interface WorklogBoardProps {
+interface EntryBoardProps {
   initialColumns: BoardColumn[];
   onRefresh?: () => void;
   canWrite: boolean;
 }
 
-export function WorklogBoard({ initialColumns, onRefresh, canWrite }: WorklogBoardProps) {
+export function EntryBoard({ initialColumns, onRefresh, canWrite }: EntryBoardProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -131,7 +131,7 @@ export function WorklogBoard({ initialColumns, onRefresh, canWrite }: WorklogBoa
 
   return (
     <DndContext
-      id="worklog-board"
+      id="entry-board"
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
