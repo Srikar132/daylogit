@@ -17,36 +17,36 @@ const geistMono = Geist_Mono({
 /* ── Metadata ─────────────────────────────────────────────── */
 export const metadata: Metadata = {
   title: {
-    default: "DayLogIt — Worklog",
-    template: "%s · DayLogIt",
+    default: "Helm — Daily progress desk",
+    template: "%s · Helm",
   },
   description:
-    "Self-hosted daily worklog. Track what you build, analyze, debug and design — across all your projects, every day.",
+    "Your daily progress desk, for individuals and teams — controlled by you and your AI over MCP.",
   keywords: [
     "worklog",
     "daily log",
     "productivity",
-    "developer log",
-    "time tracking",
-    "project tracker",
+    "team workspace",
+    "MCP",
+    "AI agent",
+    "standup",
   ],
-  authors: [{ name: "DayLogIt" }],
-  creator: "DayLogIt",
+  authors: [{ name: "Helm" }],
+  creator: "Helm",
   robots: {
     index: false, // self-hosted, keep private
     follow: false,
   },
   openGraph: {
     type: "website",
-    title: "DayLogIt — Worklog",
-    description:
-      "Self-hosted daily worklog. Track what you build, analyze, debug and design — across all your projects.",
-    siteName: "DayLogIt",
+    title: "Helm — Daily progress desk",
+    description: "Your daily progress desk, for individuals and teams — controlled by you and your AI over MCP.",
+    siteName: "Helm",
   },
   twitter: {
     card: "summary",
-    title: "DayLogIt — Worklog",
-    description: "Self-hosted daily worklog across all your projects.",
+    title: "Helm — Daily progress desk",
+    description: "Your daily progress desk, controlled by you and your AI.",
   },
 };
 

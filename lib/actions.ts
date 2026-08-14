@@ -8,6 +8,8 @@ import {
   softDeleteEntry,
   updateEntry,
 } from "@/lib/worklog";
+import { requireViewerContext } from "@/lib/workspace";
+import { canWriteEntries } from "@/lib/permissions";
 
 export type ActionState = { error?: string };
 
@@ -43,8 +45,13 @@ export async function createEntryAction(
     return { error: errorMessage(parsed.error) };
   }
 
+  const viewer = await requireViewerContext();
+  if (!canWriteEntries(viewer.role)) {
+    return { error: "View-only access." };
+  }
+
   try {
-    await createOrAppendEntry(parsed.data);
+    await createOrAppendEntry(viewer.organizationId, viewer.userId, parsed.data);
   } catch (err) {
     return { error: errorMessage(err) };
   }
@@ -73,9 +80,14 @@ export async function updateEntryAction(
     return { error: errorMessage(parsed.error) };
   }
 
+  const viewer = await requireViewerContext();
+  if (!canWriteEntries(viewer.role)) {
+    return { error: "View-only access." };
+  }
+
   try {
     const { id, ...patch } = parsed.data;
-    await updateEntry(id, patch);
+    await updateEntry(viewer.organizationId, id, patch);
   } catch (err) {
     return { error: errorMessage(err) };
   }
@@ -86,6 +98,8 @@ export async function updateEntryAction(
 
 export async function deleteEntryAction(formData: FormData): Promise<void> {
   const id = z.string().uuid().parse(formData.get("id"));
-  await softDeleteEntry(id);
+  const viewer = await requireViewerContext();
+  if (!canWriteEntries(viewer.role)) return;
+  await softDeleteEntry(viewer.organizationId, id);
   revalidatePath("/");
 }

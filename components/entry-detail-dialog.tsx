@@ -10,8 +10,8 @@ import type { EntryRow } from "@/lib/worklog";
 interface EntryDetailDialogProps {
   /** null closes the dialog — the board never fetches an entry's full body until this is set. */
   entryId: string | null;
-  /** Passed down from the board's own sections list — avoids a join just to label the header. */
-  sectionName?: string;
+  /** Passed down from the board's own status columns — avoids a join just to label the header. */
+  statusLabel?: string;
   onClose: () => void;
 }
 
@@ -33,7 +33,7 @@ interface FetchResult {
  * Rendering (edit/delete/comments, etc.) is intentionally out of scope here —
  * this is read-only for now, the rest is a follow-up.
  */
-export function EntryDetailDialog({ entryId, sectionName, onClose }: EntryDetailDialogProps) {
+export function EntryDetailDialog({ entryId, statusLabel, onClose }: EntryDetailDialogProps) {
   const [result, setResult] = useState<FetchResult | null>(null);
 
   useEffect(() => {
@@ -84,7 +84,7 @@ export function EntryDetailDialog({ entryId, sectionName, onClose }: EntryDetail
         ) : current?.error ? (
           <DetailError message={current.error} />
         ) : current?.entry ? (
-          <DetailBody entry={current.entry} sectionName={sectionName} items={items} />
+          <DetailBody entry={current.entry} statusLabel={statusLabel} items={items} />
         ) : (
           <DetailError message="Something went wrong." />
         )}
@@ -118,20 +118,20 @@ function DetailError({ message }: { message: string }) {
 
 function DetailBody({
   entry,
-  sectionName,
+  statusLabel,
   items,
 }: {
   entry: EntryRow;
-  sectionName?: string;
+  statusLabel?: string;
   items: ParsedLogItem[];
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Header — compact, mono meta line above the title (dev-panel feel) */}
       <div className="flex shrink-0 flex-col gap-1 border-b border-white/8 px-5 py-4 pr-12">
-        {sectionName && (
+        {statusLabel && (
           <span className="font-mono text-[10px] tracking-wide text-[#8ab4f8] lowercase">
-            {sectionName}
+            {statusLabel}
           </span>
         )}
         <DialogTitle className="text-[14.5px] leading-snug font-semibold break-words text-[#e8eaed]">
