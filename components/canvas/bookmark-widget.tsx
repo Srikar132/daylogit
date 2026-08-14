@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertCircle, Bookmark, ExternalLink, Loader2, RefreshCw, Trash2 } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,10 +25,60 @@ function asBookmarkData(data: Record<string, unknown> | undefined): BookmarkData
 
 export function BookmarkWidget({ id, canWrite, widgetData }: BookmarkWidgetProps) {
   const bookmark = asBookmarkData(widgetData);
+  const pendingUrl = !bookmark && typeof widgetData?.pendingUrl === "string" ? widgetData.pendingUrl : undefined;
+
+  if (pendingUrl) {
+    return <PendingBookmark id={id} url={pendingUrl} />;
+  }
   if (!bookmark) {
     return <DraftBookmarkForm id={id} canWrite={canWrite} />;
   }
   return <BookmarkCard id={id} bookmark={bookmark} canWrite={canWrite} />;
+}
+
+/** Pasting a bare URL onto the canvas creates a widget straight in this
+ *  state (see canvas-shell.tsx's paste handler) — no form, fetch starts
+ *  immediately, and the result replaces `pendingUrl` with the real
+ *  bookmark data once it resolves. */
+function PendingBookmark({ id, url }: { id: string; url: string }) {
+  const { updateWidgetData, deleteWidget } = useCanvasActions();
+  const [error, setError] = useState<string | null>(null);
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    getBookmarkMetadata(url).then((res) => {
+      if (res.error || !res.data) {
+        setError(res.error ?? "Couldn't fetch that page.");
+        return;
+      }
+      updateWidgetData(id, res.data);
+    });
+  }, [id, url, updateWidgetData]);
+
+  return (
+    <div className="nodrag flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
+      {error ? (
+        <>
+          <AlertCircle className="h-5 w-5 shrink-0 text-[#f28b82]" />
+          <p className="text-[12px] text-[#f28b82]">{error}</p>
+          <button
+            type="button"
+            onClick={() => deleteWidget(id)}
+            className="rounded-full px-3 py-1 text-[11.5px] text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed] cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </>
+      ) : (
+        <>
+          <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#8ab4f8]" />
+          <p className="text-[12px] text-[#9aa0a6]">Fetching preview…</p>
+        </>
+      )}
+    </div>
+  );
 }
 
 /** Same "starts as an inline form, becomes the card on submit" shape as

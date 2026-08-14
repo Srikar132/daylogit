@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { resolveOAuthIdentity } from "@/lib/mcp-auth";
 import {
-  WorklogError,
+  EntryError,
   searchEntries,
   softDeleteEntry,
   updateEntry,
@@ -73,7 +73,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     const row = await updateEntry(identity.organizationId, id, patch);
     return NextResponse.json(row);
   } catch (err) {
-    if (err instanceof WorklogError) {
+    if (err instanceof EntryError) {
       return NextResponse.json({ error: err.message }, { status: 400 });
     }
     throw err;

@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/better-auth";
-import { WorklogDashboard } from "@/components/worklog-dashboard";
+import { WorkspaceDashboard } from "@/components/workspace-dashboard";
 import { getBoardData } from "@/lib/worklog";
 import { todayIST } from "@/lib/date";
 import { requireViewerContext } from "@/lib/workspace";
@@ -68,7 +68,7 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     : undefined;
 
   return (
-    <WorklogDashboard
+    <WorkspaceDashboard
       slug={slug}
       columns={columns}
       canWrite={viewer.role !== "member"}

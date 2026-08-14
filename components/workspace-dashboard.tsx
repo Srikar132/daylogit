@@ -22,7 +22,7 @@ const CanvasShell = dynamic(() => import("@/components/canvas/canvas-shell").the
   loading: () => <div className="h-full w-full bg-[#1e1f20]" />,
 });
 
-interface WorklogDashboardProps {
+interface WorkspaceDashboardProps {
   slug: string;
   columns: BoardColumn[];
   canWrite: boolean;
@@ -33,7 +33,7 @@ interface WorklogDashboardProps {
   initialWorkspaceMembers?: WorkspaceMembersData;
 }
 
-export function WorklogDashboard({
+export function WorkspaceDashboard({
   slug,
   columns,
   canWrite,
@@ -42,7 +42,7 @@ export function WorklogDashboard({
   initialGmailStatus,
   initialGmailMessages,
   initialWorkspaceMembers,
-}: WorklogDashboardProps) {
+}: WorkspaceDashboardProps) {
   // One QueryClient per mounted dashboard, not per-render — a plain module
   // singleton would leak cache across different users/workspaces in the
   // same browser tab lineage (e.g. switching workspaces client-side).
