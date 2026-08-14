@@ -1,14 +1,15 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertCircle, ArrowRight, ExternalLink, FolderGit2, GitFork } from "lucide-react";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createDocProjectAction, getDocProject, type DocProjectSummary } from "@/lib/actions/docs";
+import { unwrapAction } from "@/lib/query-utils";
 
 interface ProjectDocWidgetProps {
   id: string;
@@ -41,7 +42,12 @@ function DraftProjectForm({ id, canWrite }: { id: string; canWrite: boolean }) {
   const [resourceLinks, setResourceLinks] = useState("");
   const [liveLink, setLiveLink] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+
+  const createMutation = useMutation({
+    mutationFn: (formData: FormData) => unwrapAction(createDocProjectAction({}, formData)),
+    onSuccess: (res) => updateWidgetData(id, { docProjectId: res.id }),
+    onError: (err) => setError(err.message),
+  });
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -58,14 +64,7 @@ function DraftProjectForm({ id, canWrite }: { id: string; canWrite: boolean }) {
     formData.append("githubLinks", githubLinks);
     formData.append("resourceLinks", resourceLinks);
 
-    startTransition(async () => {
-      const res = await createDocProjectAction({}, formData);
-      if (res.error || !res.id) {
-        setError(res.error ?? "Could not create the project.");
-      } else {
-        updateWidgetData(id, { docProjectId: res.id });
-      }
-    });
+    createMutation.mutate(formData);
   }
 
   return (
@@ -131,10 +130,10 @@ function DraftProjectForm({ id, canWrite }: { id: string; canWrite: boolean }) {
         )}
         <button
           type="submit"
-          disabled={isPending}
+          disabled={createMutation.isPending}
           className="rounded-full bg-[#8ab4f8] px-4 py-1.5 text-[12px] font-semibold text-[#141414] shadow-md transition-transform hover:bg-[#a6c8ff] active:scale-95 disabled:opacity-60 cursor-pointer"
         >
-          {isPending ? "Creating…" : "Create"}
+          {createMutation.isPending ? "Creating…" : "Create"}
         </button>
       </div>
     </form>

@@ -1,87 +1,88 @@
 import { useNodesState, type Node, type NodeChange } from "@xyflow/react";
+import { useMutation } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
-import { AUTO_HEIGHT_MIN, buildNode, mergeWithDefaults, type WidgetNodeContext } from "@/components/canvas/widget-registry";
-import { saveMyWidgetLayout } from "@/lib/actions/widgets";
+import { buildNode, type WidgetNodeContext } from "@/components/canvas/widget-registry";
+import { updateWidgetPositionAction, updateWidgetSizeAction } from "@/lib/actions/widgets";
+import { unwrapAction } from "@/lib/query-utils";
 import type { WidgetLayoutItem } from "@/lib/db";
 
-/**
- * Owns the node list itself and its debounced persistence to the server —
- * everything downstream (widget CRUD, toolbar drag, paste) mutates nodes
- * through the `setNodes`/`persist` this returns rather than knowing about
- * saving at all.
- */
-export function useWidgetLayout(initialLayout: WidgetLayoutItem[] | null, ctx: WidgetNodeContext) {
-  const [nodes, setNodes, onNodesChangeInternal] = useNodesState<Node>(
-    mergeWithDefaults(initialLayout).map((item) => buildNode(item, ctx)),
-  );
+const SAVE_DEBOUNCE_MS = 500;
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Ids of nodes the user has explicitly dragged a resize handle on — only
-  // these get their height persisted for auto-height widget types. Without
-  // this, the very next unrelated save (e.g. typing in any note) would
-  // capture react-flow's passively auto-measured height and silently pin
-  // it, defeating the auto-height behavior for good.
-  const manuallyResizedIds = useRef<Set<string>>(new Set());
+/**
+ * Owns the node list itself and its debounced per-widget persistence to the
+ * server. Each widget is its own DB row now (see `widgets` table) — moving
+ * or resizing widget A only ever writes widget A's row, unlike the old
+ * one-JSONB-blob-per-user design where any single change rewrote every
+ * widget's data back to the server.
+ */
+export function useWidgetLayout(initialLayout: WidgetLayoutItem[], ctx: WidgetNodeContext) {
+  const [nodes, setNodes, onNodesChangeInternal] = useNodesState<Node>(
+    initialLayout.map((item) => buildNode(item, ctx)),
+  );
 
   const [saveFailed, setSaveFailed] = useState(false);
 
-  const persist = useCallback((current: Node[]) => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      const toSave: WidgetLayoutItem[] = current.map((n) => {
-        const nodeData = n.data as unknown as { widgetType?: string; widgetData?: Record<string, unknown> };
-        const type = nodeData.widgetType ?? "board";
-        const autoHeight = type in AUTO_HEIGHT_MIN && !manuallyResizedIds.current.has(n.id);
-        return {
-          id: n.id,
-          type,
-          x: Math.round(n.position.x),
-          y: Math.round(n.position.y),
-          width: Math.round(n.width ?? 320),
-          height: autoHeight ? undefined : Math.round(n.height ?? 240),
-          data: nodeData.widgetData,
-        };
-      });
+  // One retry (react-query's built-in retry/retryDelay) absorbs a blip; if
+  // it still fails after that, surface it instead of pretending it saved —
+  // the edit would otherwise vanish silently on next reload.
+  const positionMutation = useMutation({
+    mutationFn: (input: { id: string; x: number; y: number }) => unwrapAction(updateWidgetPositionAction(input)),
+    retry: 1,
+    retryDelay: 2000,
+    onError: (err) => {
+      console.error("Failed to save widget position:", err);
+      setSaveFailed(true);
+    },
+    onSuccess: () => setSaveFailed(false),
+  });
 
-      // saveMyWidgetLayout can reject the write server-side (validation,
-      // transient DB error) — the edit would otherwise vanish silently on
-      // next reload with no sign anything went wrong. One retry absorbs a
-      // blip; if it still fails, surface it instead of pretending it saved.
-      const attempt = async (isRetry: boolean) => {
-        const result = await saveMyWidgetLayout(toSave);
-        if (result.error) {
-          console.error("Failed to save widget layout:", result.error);
-          if (!isRetry) setTimeout(() => void attempt(true), 2000);
-          else setSaveFailed(true);
-        } else {
-          setSaveFailed(false);
-        }
-      };
-      void attempt(false);
-    }, 500);
+  const sizeMutation = useMutation({
+    mutationFn: (input: { id: string; width: number; height: number }) => unwrapAction(updateWidgetSizeAction(input)),
+    retry: 1,
+    retryDelay: 2000,
+    onError: (err) => {
+      console.error("Failed to save widget size:", err);
+      setSaveFailed(true);
+    },
+    onSuccess: () => setSaveFailed(false),
+  });
+
+  // One debounce timer per widget id — dragging several widgets around
+  // (rare, but possible via a marquee-select) debounces each independently
+  // rather than one shared timer coalescing unrelated widgets' saves.
+  const saveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const scheduleSave = useCallback((id: string, run: () => void) => {
+    const timers = saveTimers.current;
+    const existing = timers.get(id);
+    if (existing) clearTimeout(existing);
+    timers.set(
+      id,
+      setTimeout(() => {
+        timers.delete(id);
+        run();
+      }, SAVE_DEBOUNCE_MS),
+    );
   }, []);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       onNodesChangeInternal(changes);
 
-      let settled = false;
       for (const c of changes) {
-        if (c.type === "position" && c.dragging === false) settled = true;
-        if (c.type === "dimensions" && c.resizing === false) {
-          settled = true;
-          manuallyResizedIds.current.add(c.id);
+        if (c.type === "position" && c.dragging === false && c.position) {
+          const { x, y } = c.position;
+          scheduleSave(c.id, () => positionMutation.mutate({ id: c.id, x: Math.round(x), y: Math.round(y) }));
+        }
+        if (c.type === "dimensions" && c.resizing === false && c.dimensions) {
+          const { width, height } = c.dimensions;
+          scheduleSave(c.id, () =>
+            sizeMutation.mutate({ id: c.id, width: Math.round(width), height: Math.round(height) }),
+          );
         }
       }
-      if (!settled) return;
-
-      setNodes((current) => {
-        persist(current);
-        return current;
-      });
     },
-    [onNodesChangeInternal, persist, setNodes],
+    [onNodesChangeInternal, scheduleSave, positionMutation, sizeMutation],
   );
 
-  return { nodes, setNodes, onNodesChange, persist, saveFailed };
+  return { nodes, setNodes, onNodesChange, saveFailed };
 }

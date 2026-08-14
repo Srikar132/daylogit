@@ -1,61 +1,82 @@
 import type { Node } from "@xyflow/react";
+import { useMutation } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import { AUTO_HEIGHT_MIN, NEW_WIDGET_DEFAULTS, buildNode, type WidgetNodeContext } from "@/components/canvas/widget-registry";
+import { createWidgetAction, deleteWidgetAction, updateWidgetDataAction, updateWidgetSizeAction } from "@/lib/actions/widgets";
+import { unwrapAction } from "@/lib/query-utils";
 import type { WidgetLayoutItem } from "@/lib/db";
 
 interface UseWidgetActionsArgs {
   ctx: WidgetNodeContext;
   setNodes: (updater: (current: Node[]) => Node[]) => void;
-  persist: (current: Node[]) => void;
 }
 
 /**
  * Widget CRUD — everything CanvasActionsProvider hands to individual widgets
  * (update/delete/resize/pending-file) plus `addWidget`, used by the toolbar-
- * drag and paste hooks to actually create new nodes.
+ * drag and paste hooks to actually create new nodes. Each call here writes
+ * exactly the one widget row it touches — no shared array to rewrite.
  */
-export function useWidgetActions({ ctx, setNodes, persist }: UseWidgetActionsArgs) {
+export function useWidgetActions({ ctx, setNodes }: UseWidgetActionsArgs) {
+  const updateDataMutation = useMutation({
+    mutationFn: (input: { id: string; widgetData: Record<string, unknown> }) =>
+      unwrapAction(updateWidgetDataAction(input.id, input.widgetData)),
+    onError: (err) => console.error("Failed to save widget data:", err),
+  });
+
   const updateWidgetData = useCallback(
     (id: string, widgetData: Record<string, unknown>) => {
-      setNodes((current) => {
-        const next = current.map((n) => (n.id === id ? { ...n, data: { ...n.data, widgetData } } : n));
-        persist(next);
-        return next;
-      });
+      setNodes((current) => current.map((n) => (n.id === id ? { ...n, data: { ...n.data, widgetData } } : n)));
+      updateDataMutation.mutate({ id, widgetData });
     },
-    [persist, setNodes],
+    [setNodes, updateDataMutation],
   );
+
+  const resizeMutation = useMutation({
+    mutationFn: (input: { id: string; width: number; height: number }) => unwrapAction(updateWidgetSizeAction(input)),
+    onError: (err) => console.error("Failed to save widget size:", err),
+  });
 
   const resizeWidget = useCallback(
     (id: string, size: { width: number; height: number }) => {
-      setNodes((current) => {
-        const next = current.map((n) => (n.id === id ? { ...n, width: size.width, height: size.height } : n));
-        persist(next);
-        return next;
-      });
+      setNodes((current) => current.map((n) => (n.id === id ? { ...n, width: size.width, height: size.height } : n)));
+      resizeMutation.mutate({ id, ...size });
     },
-    [persist, setNodes],
+    [setNodes, resizeMutation],
   );
 
-  // Pending uploads live only in memory — a raw File can't be serialized
-  // into the persisted JSONB layout. Keyed by the widget id it belongs to.
+  // Pending uploads live only in memory — a raw File can't be persisted.
+  // Keyed by the widget id it belongs to.
   const pendingFiles = useRef<Map<string, File>>(new Map());
   const getPendingFile = useCallback((id: string) => pendingFiles.current.get(id), []);
   const clearPendingFile = useCallback((id: string) => {
     pendingFiles.current.delete(id);
   }, []);
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => unwrapAction(deleteWidgetAction(id)),
+    onError: (err) => console.error("Failed to delete widget:", err),
+  });
+
   const deleteWidget = useCallback(
     (id: string) => {
       pendingFiles.current.delete(id);
-      setNodes((current) => {
-        const next = current.filter((n) => n.id !== id);
-        persist(next);
-        return next;
-      });
+      setNodes((current) => current.filter((n) => n.id !== id));
+      deleteMutation.mutate(id);
     },
-    [persist, setNodes],
+    [setNodes, deleteMutation],
   );
+
+  const createMutation = useMutation({
+    mutationFn: (item: WidgetLayoutItem) => unwrapAction(createWidgetAction(item)),
+    onError: (err, item) => {
+      console.error("Failed to create widget:", err);
+      // The optimistic node never made it to the server — pull it back out
+      // rather than leaving a widget on the canvas that doesn't exist in
+      // the DB and will vanish on next reload with no explanation.
+      setNodes((current) => current.filter((n) => n.id !== item.id));
+    },
+  });
 
   const addWidget = useCallback(
     (type: string, dropPoint?: { x: number; y: number }) => {
@@ -72,14 +93,11 @@ export function useWidgetActions({ ctx, setNodes, persist }: UseWidgetActionsArg
         width: defaults.width,
         height: defaults.height,
       };
-      setNodes((current) => {
-        const next = [...current, buildNode(item, ctx)];
-        persist(next);
-        return next;
-      });
+      setNodes((current) => [...current, buildNode(item, ctx)]);
+      createMutation.mutate(item);
       return item.id;
     },
-    [ctx, persist, setNodes],
+    [ctx, setNodes, createMutation],
   );
 
   // A pasted/dropped file becomes its own widget immediately (status:

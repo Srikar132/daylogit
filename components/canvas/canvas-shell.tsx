@@ -16,6 +16,7 @@ import type { WidgetNodeContext } from "@/components/canvas/widget-registry";
 import type { WidgetLayoutItem } from "@/lib/db";
 import type { BoardColumn } from "@/lib/worklog";
 import type { DocProjectSummary } from "@/lib/actions/docs";
+import type { AlbumPreview } from "@/lib/actions/albums";
 import type { GmailStatus } from "@/lib/actions/gmail";
 import type { GmailMessageSummary } from "@/lib/gmail";
 import type { WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
@@ -24,10 +25,11 @@ const nodeTypes = { widget: WidgetNode };
 
 interface CanvasShellProps {
   slug: string;
-  initialLayout: WidgetLayoutItem[] | null;
+  initialLayout: WidgetLayoutItem[];
   columns: BoardColumn[];
   canWrite: boolean;
   initialProjectSummaries: Record<string, DocProjectSummary>;
+  initialAlbumPreviews: Record<string, AlbumPreview>;
   initialGmailStatus: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
   initialWorkspaceMembers?: WorkspaceMembersData;
@@ -39,6 +41,7 @@ function CanvasInner({
   columns,
   canWrite,
   initialProjectSummaries,
+  initialAlbumPreviews,
   initialGmailStatus,
   initialGmailMessages,
   initialWorkspaceMembers,
@@ -49,6 +52,7 @@ function CanvasInner({
       canWrite,
       slug,
       initialProjectSummaries,
+      initialAlbumPreviews,
       initialGmailStatus,
       initialGmailMessages,
       initialWorkspaceMembers,
@@ -58,15 +62,16 @@ function CanvasInner({
       canWrite,
       slug,
       initialProjectSummaries,
+      initialAlbumPreviews,
       initialGmailStatus,
       initialGmailMessages,
       initialWorkspaceMembers,
     ],
   );
 
-  const { nodes, setNodes, onNodesChange, persist, saveFailed } = useWidgetLayout(initialLayout, ctx);
+  const { nodes, setNodes, onNodesChange, saveFailed } = useWidgetLayout(initialLayout, ctx);
   const { updateWidgetData, deleteWidget, resizeWidget, addWidget, addMediaFiles, getPendingFile, clearPendingFile } =
-    useWidgetActions({ ctx, setNodes, persist });
+    useWidgetActions({ ctx, setNodes });
 
   const { screenToFlowPosition } = useReactFlow();
   const { dndSensors, draggingType, handleDragStart, handleDragEnd } = useToolbarDrag({

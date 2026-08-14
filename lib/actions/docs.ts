@@ -1,7 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { revalidateTag, unstable_cache } from "next/cache";
+import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, docProjects, docPages, type DocLink } from "@/lib/db";
 import { requireViewerContext } from "@/lib/workspace";
@@ -78,7 +78,6 @@ export async function createDocProjectAction(
   // project with zero pages; "+ Add page" in the docs route still works.
   await db.insert(docPages).values({ docProjectId: project.id, title: "Overview" });
 
-  revalidatePath("/workspace", "layout");
   return { id: project.id };
 }
 
@@ -120,7 +119,7 @@ export async function updateDocProjectAction(
     })
     .where(and(eq(docProjects.id, parsed.data.id), eq(docProjects.organizationId, viewer.organizationId)));
 
-  revalidatePath("/workspace", "layout");
+  revalidateTag(`doc-project:${parsed.data.id}`, { expire: 0 });
   return {};
 }
 
@@ -140,6 +139,7 @@ export async function setDocProjectPublic(
     .returning({ shareToken: docProjects.shareToken });
 
   if (!project) return { error: "Project not found." };
+  revalidateTag(`doc-project:${id}`, { expire: 0 });
   return { shareToken: project.shareToken };
 }
 
@@ -153,7 +153,8 @@ export async function deleteDocProjectAction(id: string): Promise<DocActionState
     .delete(docProjects)
     .where(and(eq(docProjects.id, id), eq(docProjects.organizationId, viewer.organizationId)));
 
-  revalidatePath("/workspace", "layout");
+  revalidateTag(`doc-project:${id}`, { expire: 0 });
+  revalidateTag(`doc-pages:${id}`, { expire: 0 });
   return {};
 }
 
@@ -179,7 +180,7 @@ export async function createDocPage(docProjectId: string, title = "Untitled"): P
     .values({ docProjectId, title, position: nextPosition })
     .returning({ id: docPages.id });
 
-  revalidatePath("/", "layout");
+  revalidateTag(`doc-pages:${docProjectId}`, { expire: 0 });
   return { id: page?.id };
 }
 
@@ -209,7 +210,7 @@ export async function updateDocPage(
     .set({ ...patch, updatedAt: new Date() })
     .where(eq(docPages.id, id));
 
-  revalidatePath("/", "layout");
+  revalidateTag(`doc-pages:${page.docProjectId}`, { expire: 0 });
   return {};
 }
 
@@ -235,7 +236,7 @@ export async function deleteDocPage(id: string, docProjectId: string): Promise<D
   }
 
   await db.delete(docPages).where(eq(docPages.id, id));
-  revalidatePath("/", "layout");
+  revalidateTag(`doc-pages:${docProjectId}`, { expire: 0 });
   return {};
 }
 
@@ -250,47 +251,63 @@ export async function getDocProjectsForWorkspace(): Promise<DocProjectSummary[]>
 
 export async function getDocProject(id: string): Promise<DocProjectSummary | null> {
   const viewer = await requireViewerContext();
-  const [row] = await db
-    .select()
-    .from(docProjects)
-    .where(and(eq(docProjects.id, id), eq(docProjects.organizationId, viewer.organizationId)))
-    .limit(1);
-  return row ?? null;
+  const organizationId = viewer.organizationId;
+  return unstable_cache(
+    async () => {
+      const [row] = await db
+        .select()
+        .from(docProjects)
+        .where(and(eq(docProjects.id, id), eq(docProjects.organizationId, organizationId)))
+        .limit(1);
+      return row ?? null;
+    },
+    ["doc-project", id, organizationId],
+    { tags: [`doc-project:${id}`], revalidate: 300 },
+  )();
 }
 
 /** Batched lookup for the canvas — avoids one client round-trip per
- *  project-doc widget on the canvas. Called server-side (page.tsx) so it
+ *  project-doc widget on the canvas (still one round trip: the ids resolve
+ *  in parallel, each through getDocProject's own per-project cache, rather
+ *  than one shared uncached query). Called server-side (page.tsx) so it
  *  runs in parallel with the other canvas prefetches, and again client-side
  *  via useQuery for anything created after that initial render. */
 export async function getDocProjectsByIds(ids: string[]): Promise<Record<string, DocProjectSummary>> {
   if (ids.length === 0) return {};
-  const viewer = await requireViewerContext();
-  const rows = await db
-    .select()
-    .from(docProjects)
-    .where(and(inArray(docProjects.id, ids), eq(docProjects.organizationId, viewer.organizationId)));
-  return Object.fromEntries(rows.map((row) => [row.id, row]));
+  const rows = await Promise.all(ids.map((id) => getDocProject(id)));
+  return Object.fromEntries(rows.filter((row): row is DocProjectSummary => row !== null).map((row) => [row.id, row]));
 }
 
 export async function getDocPages(docProjectId: string): Promise<DocPageRow[]> {
   await requireViewerContext();
-  return db
-    .select()
-    .from(docPages)
-    .where(eq(docPages.docProjectId, docProjectId))
-    .orderBy(asc(docPages.position));
+  return unstable_cache(
+    async () =>
+      db.select().from(docPages).where(eq(docPages.docProjectId, docProjectId)).orderBy(asc(docPages.position)),
+    ["doc-pages", docProjectId],
+    { tags: [`doc-pages:${docProjectId}`], revalidate: 300 },
+  )();
 }
 
 /** Deliberately the one query in this app allowed to run with no session —
  *  backs the public /share/docs/[token] route. Callers must still check
- *  `isPublic` themselves before rendering anything. */
+ *  `isPublic` themselves before rendering anything. Time-based only (no
+ *  revalidateTag wiring from the private mutations above, which only know
+ *  the project id, not its share token) — a public reader can see up to 5
+ *  minutes of staleness, which is an acceptable tradeoff for a read-only
+ *  external page. */
 export async function getDocProjectByShareToken(token: string) {
-  const [project] = await db.select().from(docProjects).where(eq(docProjects.shareToken, token)).limit(1);
-  if (!project) return null;
-  const pages = await db
-    .select()
-    .from(docPages)
-    .where(eq(docPages.docProjectId, project.id))
-    .orderBy(asc(docPages.position));
-  return { project, pages };
+  return unstable_cache(
+    async () => {
+      const [project] = await db.select().from(docProjects).where(eq(docProjects.shareToken, token)).limit(1);
+      if (!project) return null;
+      const pages = await db
+        .select()
+        .from(docPages)
+        .where(eq(docPages.docProjectId, project.id))
+        .orderBy(asc(docPages.position));
+      return { project, pages };
+    },
+    ["doc-share", token],
+    { tags: [`doc-share:${token}`], revalidate: 300 },
+  )();
 }

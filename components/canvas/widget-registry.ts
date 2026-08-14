@@ -4,6 +4,7 @@ import type { WorkspaceMembersData } from "@/components/canvas/workspace-setting
 import type { WidgetLayoutItem } from "@/lib/db";
 import type { BoardColumn } from "@/lib/worklog";
 import type { DocProjectSummary } from "@/lib/actions/docs";
+import type { AlbumPreview } from "@/lib/actions/albums";
 import type { GmailStatus } from "@/lib/actions/gmail";
 import type { GmailMessageSummary } from "@/lib/gmail";
 
@@ -13,37 +14,35 @@ import type { GmailMessageSummary } from "@/lib/gmail";
  * canvas-shell.tsx's component body.
  */
 
-export const MULTI_INSTANCE_WIDGET_TYPES = new Set(["bookmark", "markdown", "media", "project-doc"]);
+export const MULTI_INSTANCE_WIDGET_TYPES = new Set(["bookmark", "gallery", "markdown", "media", "project-doc"]);
 export const KNOWN_WIDGET_TYPES = new Set([
   "board",
   "bookmark",
+  "gallery",
   "mail-summary",
   "markdown",
   "media",
   "project-doc",
   "workspace-settings",
 ]);
-export const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary"]);
+// Bookmark is a compact, fixed-format row (icon + text) — its height should
+// always hug its own content, never be dragged to an arbitrary size (the
+// reference design has no resize handles on it at all).
+export const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary", "bookmark", "gallery"]);
 
 // Floor for widget types that auto-size to content (no persisted height yet)
 // — without this an almost-empty note would render as a sliver. Height still
 // grows past this naturally as content grows; it's a min, not a fixed size.
-export const AUTO_HEIGHT_MIN: Record<string, number> = { markdown: 240, "project-doc": 200, bookmark: 220 };
+// Bookmark has no entry here — its content (icon + title + url) already has
+// a fixed minimum height on its own, so a floor on top of that just leaves
+// dead space below a card with no description.
+export const AUTO_HEIGHT_MIN: Record<string, number> = { markdown: 240, "project-doc": 200, gallery: 200 };
 // Media needs right-click/video controls to work immediately, not after an
 // extra double-click — the entered-gating built for text/board widgets
 // would otherwise block the whole point of this widget.
-// Project-doc and bookmark cards only have link clicks + small buttons,
-// nothing that needs entered-mode's inline-typing gating either.
-export const ALWAYS_INTERACTIVE_WIDGET_TYPES = new Set(["media", "project-doc", "bookmark"]);
-// No header/border chrome — just the media filling the node. Since there's
-// no ".widget-drag-handle" element to grab, these skip the dragHandle
-// restriction entirely so the node is draggable from anywhere on it instead.
-// Notes are chromeless too now (no header/toolbar-in-card) but, unlike
-// media, aren't in ALWAYS_INTERACTIVE_WIDGET_TYPES above — chromeless just
-// means "no header/border chrome," it's independent of the double-click
-// gate, which notes still need (accidental text edits while repositioning
-// the canvas are a real risk; media's link clicks/video controls aren't).
-export const CHROMELESS_WIDGET_TYPES = new Set(["media", "markdown"]);
+// Project-doc, bookmark, and gallery cards only have link clicks + small
+// buttons, nothing that needs entered-mode's inline-typing gating either.
+export const ALWAYS_INTERACTIVE_WIDGET_TYPES = new Set(["media", "project-doc", "bookmark", "gallery"]);
 
 // Fixed 3-column board — wide enough that all three "To Do / In Progress /
 // Completed" columns are visible without horizontal scroll on a typical
@@ -63,10 +62,11 @@ export const DEFAULT_LAYOUT: WidgetLayoutItem[] = [
 // fresh drop-point, since there's no real height to center on yet).
 export const NEW_WIDGET_DEFAULTS: Record<string, { width: number; height?: number }> = {
   markdown: { width: 340 },
-  // Height omitted — a draft URL form and a filled-out preview card (image
-  // + title + description) are very different heights, same reasoning as
-  // project-doc/markdown below.
-  bookmark: { width: 300 },
+  // Height omitted — a draft URL form and a filled-out compact card (icon +
+  // title + description + url, one row) are different heights, same
+  // reasoning as project-doc/markdown below. Wider than the old design —
+  // this is a horizontal row now, not a tall image-on-top card.
+  bookmark: { width: 380 },
   // Fixed box regardless of the pasted file's real aspect ratio — the media
   // itself renders with object-fit:contain, so nothing distorts; the user
   // resizes to taste rather than the box auto-fitting the source dimensions.
@@ -75,6 +75,9 @@ export const NEW_WIDGET_DEFAULTS: Record<string, { width: number; height?: numbe
   // note widget, same reasoning: a draft form and a filled-out card can be
   // very different heights.
   "project-doc": { width: 320 },
+  // Height omitted — same reasoning as project-doc: a draft name form and
+  // a filled-out fan-card preview are different heights.
+  gallery: { width: 300 },
 };
 
 // Deliberately just plain data — no callbacks here. Mutation handlers
@@ -86,6 +89,7 @@ export type WidgetNodeContext = {
   canWrite: boolean;
   slug: string;
   initialProjectSummaries: Record<string, DocProjectSummary>;
+  initialAlbumPreviews: Record<string, AlbumPreview>;
   initialGmailStatus: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
   initialWorkspaceMembers?: WorkspaceMembersData;
@@ -97,6 +101,8 @@ export function widgetTitle(type: string): string {
       return "Board";
     case "bookmark":
       return "Bookmark";
+    case "gallery":
+      return "Gallery";
     case "mail-summary":
       return "Today's Mail";
     case "markdown":
@@ -113,10 +119,15 @@ export function widgetTitle(type: string): string {
 }
 
 export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node {
-  const autoMin = item.height === undefined ? AUTO_HEIGHT_MIN[item.type] : undefined;
-  const chromeless = CHROMELESS_WIDGET_TYPES.has(item.type);
+  // Bookmark never keeps a stored height — any value sitting in the DB may
+  // be a leftover from a previous card design (e.g. a taller thumbnail
+  // layout) that no longer matches this type's actual content height, so
+  // it's always ignored in favor of auto-measuring the current content.
+  const height = item.type === "bookmark" ? undefined : item.height;
+  const autoMin = height === undefined ? AUTO_HEIGHT_MIN[item.type] : undefined;
 
   const docProjectId = item.type === "project-doc" ? (item.data?.docProjectId as string | undefined) : undefined;
+  const albumId = item.type === "gallery" ? (item.data?.albumId as string | undefined) : undefined;
 
   const data: WidgetNodeData = {
     title: widgetTitle(item.type),
@@ -124,12 +135,12 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
     resizable: !NON_RESIZABLE_WIDGET_TYPES.has(item.type),
     minHeight: autoMin,
     alwaysInteractive: ALWAYS_INTERACTIVE_WIDGET_TYPES.has(item.type),
-    chromeless,
     widgetType: item.type,
     widgetData: item.data,
     columns: item.type === "board" ? ctx.columns : undefined,
-    slug: item.type === "project-doc" ? ctx.slug : undefined,
+    slug: item.type === "project-doc" || item.type === "gallery" ? ctx.slug : undefined,
     initialSummary: docProjectId ? ctx.initialProjectSummaries[docProjectId] : undefined,
+    initialPreview: albumId ? ctx.initialAlbumPreviews[albumId] : undefined,
     initialGmailStatus: item.type === "mail-summary" ? ctx.initialGmailStatus : undefined,
     initialGmailMessages: item.type === "mail-summary" ? ctx.initialGmailMessages : undefined,
     initialWorkspaceMembers: item.type === "workspace-settings" ? ctx.initialWorkspaceMembers : undefined,
@@ -140,8 +151,8 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
     type: "widget",
     position: { x: item.x, y: item.y },
     width: item.width,
-    height: item.height,
-    dragHandle: chromeless ? undefined : ".widget-drag-handle",
+    height,
+    dragHandle: undefined,
     data: data as unknown as Record<string, unknown>,
   };
 }

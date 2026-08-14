@@ -71,6 +71,27 @@
       "when": 1786653119607,
       "tag": "0009_elite_whiplash",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786716608743,
+      "tag": "0010_dusty_bloodstrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786719986863,
+      "tag": "0011_absent_mulholland_black",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786731860140,
+      "tag": "0012_nasty_wolfsbane",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Copy, Download, Link as LinkIcon, Loader2, Trash2 } from "lucide-react";
+import { AlertCircle, Copy, Download, Link as LinkIcon, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
 import {
@@ -9,20 +9,15 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { Skeleton } from "@/components/ui/skeleton";
+import { toastManager } from "@/lib/toast";
+import { uploadToCloudinary } from "@/lib/upload-client";
 
 interface MediaWidgetProps {
   id: string;
   data?: Record<string, unknown>;
   canWrite: boolean;
 }
-
-type UploadResponse = {
-  url?: string;
-  resourceType?: "image" | "video";
-  width?: number;
-  height?: number;
-  error?: string;
-};
 
 type MediaData =
   | { status: "uploading" }
@@ -61,41 +56,19 @@ export function MediaWidget({ id, data, canWrite }: MediaWidgetProps) {
 
   function upload(file: File) {
     setProgress(0);
-    const xhr = new XMLHttpRequest();
-    const formData = new FormData();
-    formData.append("file", file);
-
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
-    };
-    xhr.onload = () => {
-      let payload: UploadResponse = {};
-      try {
-        payload = JSON.parse(xhr.responseText);
-      } catch {
-        payload = { error: "Upload failed. Try again." };
-      }
-      if (xhr.status >= 200 && xhr.status < 300 && payload.url) {
+    uploadToCloudinary(file, setProgress)
+      .then((result) => {
         clearPendingFile(id);
-        updateWidgetData(id, {
-          status: "ready",
-          url: payload.url,
-          resourceType: payload.resourceType ?? "image",
-        });
-        if (payload.width && payload.height) {
-          resizeWidget(id, fitToAspect(payload.width, payload.height));
+        updateWidgetData(id, { status: "ready", url: result.url, resourceType: result.resourceType });
+        if (result.width && result.height) {
+          resizeWidget(id, fitToAspect(result.width, result.height));
         }
-      } else {
+      })
+      .catch((err: Error) => {
         startedRef.current = false;
-        updateWidgetData(id, { status: "error", message: payload.error ?? "Upload failed. Try again." });
-      }
-    };
-    xhr.onerror = () => {
-      startedRef.current = false;
-      updateWidgetData(id, { status: "error", message: "Network error during upload." });
-    };
-    xhr.open("POST", "/api/media/upload");
-    xhr.send(formData);
+        updateWidgetData(id, { status: "error", message: err.message });
+        toastManager.add({ title: "Upload failed", description: err.message, type: "error" });
+      });
   }
 
   useEffect(() => {
@@ -148,16 +121,21 @@ export function MediaWidget({ id, data, canWrite }: MediaWidgetProps) {
   }
 
   if (media.status === "uploading") {
+    // Shaped like where the image/video itself will end up (fills the
+    // card) rather than a generic centered spinner — the progress bar still
+    // carries the one thing a skeleton can't (actual upload percentage).
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        <Loader2 className="h-5 w-5 animate-spin text-[#8ab4f8]" />
-        <div className="w-full max-w-[180px] overflow-hidden rounded-full bg-white/[0.06]">
-          <div
-            className="h-1 rounded-full bg-[#8ab4f8] transition-[width] duration-150"
-            style={{ width: `${progress}%` }}
-          />
+      <div className="relative h-full w-full overflow-hidden rounded-2xl">
+        <Skeleton className="absolute inset-0 rounded-2xl" />
+        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-4 text-center">
+          <div className="w-full max-w-[180px] overflow-hidden rounded-full bg-black/40">
+            <div
+              className="h-1 rounded-full bg-[#8ab4f8] transition-[width] duration-150"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="text-[11.5px] text-white/80">Uploading… {progress}%</p>
         </div>
-        <p className="text-[11.5px] text-[#9aa0a6]">Uploading… {progress}%</p>
       </div>
     );
   }

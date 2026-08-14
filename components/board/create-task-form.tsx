@@ -1,5 +1,6 @@
 "use client";
 
+import { useMutation } from "@tanstack/react-query";
 import { CalendarDays, ChevronDown, CornerDownLeft, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { WORK_TYPES, type WorkType } from "@/lib/constants";
@@ -101,15 +102,9 @@ export function CreateTaskForm({ status, onCreated, onCancel }: CreateTaskFormPr
   const [workType, setWorkType] = useState<WorkType>("task");
   const [dueDate, setDueDate] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleCreate(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim() || isSubmitting) return;
-
-    setIsSubmitting(true);
-    setError(null);
-    try {
+  const createMutation = useMutation({
+    mutationFn: async () => {
       const res = await fetch("/api/entries/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -120,18 +115,20 @@ export function CreateTaskForm({ status, onCreated, onCancel }: CreateTaskFormPr
           dueDate: dueDate || undefined,
         }),
       });
-      if (res.ok) {
-        onCreated();
-      } else {
+      if (!res.ok) {
         const body = await res.json().catch(() => null);
-        setError(body?.error ?? "Couldn't create this task.");
+        throw new Error(body?.error ?? "Couldn't create this task.");
       }
-    } catch (err) {
-      console.error("Failed to create entry", err);
-      setError("Couldn't create this task.");
-    } finally {
-      setIsSubmitting(false);
-    }
+    },
+    onSuccess: onCreated,
+    onError: (err) => setError(err.message),
+  });
+
+  function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim() || createMutation.isPending) return;
+    setError(null);
+    createMutation.mutate();
   }
 
   return (
@@ -149,7 +146,7 @@ export function CreateTaskForm({ status, onCreated, onCancel }: CreateTaskFormPr
           placeholder="What needs to be done?"
           rows={2}
           autoFocus
-          disabled={isSubmitting}
+          disabled={createMutation.isPending}
           className="w-full resize-none bg-transparent text-[14px] text-[#e8eaed] placeholder:text-[#80868b] focus:outline-none"
         />
         <button
@@ -170,10 +167,10 @@ export function CreateTaskForm({ status, onCreated, onCancel }: CreateTaskFormPr
 
         <button
           type="submit"
-          disabled={!title.trim() || isSubmitting}
+          disabled={!title.trim() || createMutation.isPending}
           title="Create (Enter)"
           className={`ml-auto flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
-            title.trim() && !isSubmitting
+            title.trim() && !createMutation.isPending
               ? "bg-[#8ab4f8] text-[#141414] cursor-pointer"
               : "bg-white/[0.06] text-[#5f6368]"
           }`}

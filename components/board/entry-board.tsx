@@ -14,6 +14,7 @@ import {
   DragEndEvent,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { useMutation } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -80,7 +81,20 @@ export function EntryBoard({ initialColumns, onRefresh, canWrite }: EntryBoardPr
     if (foundLog) setActiveLog(foundLog);
   }
 
-  async function handleDragEnd(event: DragEndEvent) {
+  const moveMutation = useMutation({
+    mutationFn: async (input: { entryId: string; status: TaskStatus }) => {
+      const res = await fetch("/api/entries/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      if (!res.ok) throw new Error(`Failed to move entry (${res.status})`);
+    },
+    onSuccess: () => onRefresh?.(),
+    onError: (err) => console.error("Failed to move log entry", err),
+  });
+
+  function handleDragEnd(event: DragEndEvent) {
     setActiveLog(null);
     setOverStatus(null);
 
@@ -117,16 +131,7 @@ export function EntryBoard({ initialColumns, onRefresh, canWrite }: EntryBoardPr
       return next;
     });
 
-    try {
-      await fetch("/api/entries/move", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entryId: logId, status: targetStatus }),
-      });
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      console.error("Failed to move log entry", err);
-    }
+    moveMutation.mutate({ entryId: logId, status: targetStatus });
   }
 
   return (
