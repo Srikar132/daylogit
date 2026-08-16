@@ -13,6 +13,13 @@ type CanvasActions = {
   /** Resizes a node directly (width/height), not its data — used once to
    *  snap a fresh media widget to the uploaded file's real aspect ratio. */
   resizeWidget: (id: string, size: { width: number; height: number }) => void;
+  /** Ephemeral, not persisted — gates whether xyflow's own drag handler is
+   *  attached to this node (idle: false, selected: true, interactive: false). */
+  setWidgetDraggable: (id: string, draggable: boolean) => void;
+  /** Ephemeral, not persisted — `useReactFlow().updateNode()` writes through
+   *  a batch queue that a controlled `nodes` prop clobbers back to stale on
+   *  the next render, so deselecting has to go through this same pipeline. */
+  setWidgetSelected: (id: string, selected: boolean) => void;
 };
 
 const CanvasActionsContext = createContext<CanvasActions | null>(null);

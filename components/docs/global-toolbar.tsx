@@ -16,6 +16,7 @@ import {
   Strikethrough,
   Underline as UnderlineIcon,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const TEXT_COLORS = ["#1a1a1a", "#3b6fd4", "#2e8b57", "#b8860b", "#c0392b", "#8e44ad"];
 const BG_COLORS = [
@@ -49,7 +50,7 @@ export function GlobalToolbar({ editor }: GlobalToolbarProps) {
   const disabled = !editor;
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-white/[0.06] bg-[#131314] px-3 py-1.5 print:hidden">
+    <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-white/[0.06] bg-card px-3 py-1.5 print:hidden">
       <ToolbarButton
         disabled={disabled}
         onClick={() => editor?.chain().focus().toggleBold().run()}
@@ -188,7 +189,7 @@ export function GlobalToolbar({ editor }: GlobalToolbarProps) {
             className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full ring-1 ring-white/10 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
             style={{ backgroundColor: bg.value ?? "transparent" }}
           >
-            {!bg.value && <span className="text-[8px] text-[#f28b82]">×</span>}
+            {!bg.value && <span className="text-[8px] text-destructive">×</span>}
           </button>
         ))}
       </div>
@@ -197,15 +198,17 @@ export function GlobalToolbar({ editor }: GlobalToolbarProps) {
 
       <div className="flex items-center gap-0.5">
         {FONT_SIZES.map((s) => (
-          <button
+          <Button
             key={s.value}
             type="button"
+            variant="ghost"
+            size="xs"
             disabled={disabled}
             onClick={() => editor?.chain().focus().setFontSize(s.value).run()}
-            className="rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-[#9aa0a6] hover:bg-white/[0.06] hover:text-[#e8eaed] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"
           >
             {s.label}
-          </button>
+          </Button>
         ))}
       </div>
     </div>
@@ -224,15 +227,17 @@ function ToolbarButton({
   children: React.ReactNode;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="icon-sm"
       disabled={disabled}
       onClick={onClick}
-      className={`rounded-md p-1.5 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${
-        active ? "bg-[#8ab4f8]/20 text-[#8ab4f8]" : "text-[#9aa0a6] hover:bg-white/[0.06] hover:text-[#e8eaed]"
+      className={`rounded-md p-1.5 ${
+        active ? "bg-primary/20 text-primary" : "text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"
       }`}
     >
       {children}
-    </button>
+    </Button>
   );
 }

@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Download, FolderInput, Trash2, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAlbumImageMutations } from "@/components/albums/use-album-image-mutations";
 import type { AlbumGroupRow, AlbumImageRow } from "@/lib/actions/albums";
@@ -52,11 +53,11 @@ export function BulkActionBar({ selectedIds, images, groups, onClear, onDone }: 
       exit={{ y: 40, opacity: 0 }}
       className="pointer-events-none fixed inset-x-0 bottom-4 z-30 flex justify-center px-4"
     >
-      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#131314] px-3 py-2 shadow-2xl">
-        <span className="px-1.5 text-[12.5px] font-medium text-[#e8eaed]">{ids.length} selected</span>
+      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-white/[0.08] bg-popover px-3 py-2 shadow-2xl">
+        <span className="px-1.5 text-[12.5px] font-medium text-foreground">{ids.length} selected</span>
 
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-full bg-white/[0.06] px-3 py-1.5 text-[12px] text-[#e8eaed] hover:bg-white/10 cursor-pointer">
+          <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-full bg-white/[0.06] px-3 py-1.5 text-[12px] text-foreground hover:bg-white/10 cursor-pointer">
             <FolderInput className="h-3.5 w-3.5" /> Move
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
@@ -69,30 +70,34 @@ export function BulkActionBar({ selectedIds, images, groups, onClear, onDone }: 
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <button
+        <Button
           type="button"
+          variant="destructive"
           onClick={handleDelete}
-          className="flex items-center gap-1.5 rounded-full bg-[#f28b82]/10 px-3 py-1.5 text-[12px] text-[#f28b82] hover:bg-[#f28b82]/20 cursor-pointer"
+          className="h-auto gap-1.5 rounded-full px-3 py-1.5 text-[12px]"
         >
           <Trash2 className="h-3.5 w-3.5" /> Delete
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={handleDownload}
-          className="hidden items-center gap-1.5 rounded-full bg-white/[0.06] px-3 py-1.5 text-[12px] text-[#e8eaed] hover:bg-white/10 cursor-pointer sm:flex"
+          className="hidden h-auto gap-1.5 rounded-full bg-white/[0.06] px-3 py-1.5 text-[12px] text-foreground hover:bg-white/10 sm:flex"
         >
           <Download className="h-3.5 w-3.5" /> Download
-        </button>
+        </Button>
 
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon-sm"
           onClick={onClear}
           title="Clear selection"
-          className="flex h-7 w-7 items-center justify-center rounded-full text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed] cursor-pointer"
+          className="rounded-full text-muted-foreground"
         >
           <X className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </div>
     </motion.div>
   );

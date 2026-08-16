@@ -12,8 +12,10 @@ import { TableHeader } from "@tiptap/extension-table-header";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TaskList } from "@tiptap/extension-task-list";
 import { TaskItem } from "@tiptap/extension-task-item";
+import { Markdown } from "tiptap-markdown";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FontSize } from "@/lib/tiptap/font-size";
+import { MarkdownPasteHandler } from "@/lib/tiptap/markdown-paste";
 import { useWidgetChrome } from "@/components/canvas/widget-chrome-context";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
 import { NoteToolbar } from "@/components/canvas/note-toolbar";
@@ -62,6 +64,16 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
       TableCell,
       TaskList,
       TaskItem.configure({ nested: true }),
+      // Parses pasted markdown syntax (headings, code fences, tables, ...)
+      // into real editor nodes instead of inserting the raw text verbatim —
+      // storage stays ProseMirror JSON either way, this only affects paste.
+      Markdown.configure({ transformPastedText: true, transformCopiedText: false }),
+      // tiptap-markdown's own paste hook only fires when the clipboard has
+      // NO html flavor — most copy sources (browser, chat apps, editors)
+      // attach one regardless, so it never actually engages on its own.
+      // This forces markdown parsing whenever the plain-text payload looks
+      // like real markdown source, independent of what html came with it.
+      MarkdownPasteHandler,
     ],
     content: initialDoc ?? "",
     editable: entered && canWrite,

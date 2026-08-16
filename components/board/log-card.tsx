@@ -4,7 +4,11 @@ import type { EntryListItem } from "@/lib/worklog";
 
 /** The card's visual content — shared by the board's real (draggable) card
  *  and the DragOverlay ghost, so the two never drift apart. */
-export function LogCardContent({ log }: { log: Pick<EntryListItem, "title" | "workType" | "dueDate"> }) {
+export function LogCardContent({
+  log,
+}: {
+  log: Pick<EntryListItem, "title" | "workType" | "dueDate" | "date">;
+}) {
   return (
     <>
       <span className="min-w-0 truncate text-[13px] text-[#e8eaed]">
@@ -12,8 +16,12 @@ export function LogCardContent({ log }: { log: Pick<EntryListItem, "title" | "wo
       </span>
       <div className="flex items-center gap-1.5">
         <WorkTypeIcon type={log.workType} className="h-3.5 w-3.5 shrink-0" />
+        {/* The board is no longer scoped to one date — entries from any day
+            mix in the same column now, so each card needs its own date to
+            stay legible instead of relying on an implicit "it's all today". */}
+        <span className="text-[11px] text-[#80868b]">{formatDateLabel(log.date)}</span>
         {log.dueDate && (
-          <span className="text-[11px] text-[#80868b]">{formatDateLabel(log.dueDate)}</span>
+          <span className="text-[11px] text-[#80868b]">· due {formatDateLabel(log.dueDate)}</span>
         )}
       </div>
     </>

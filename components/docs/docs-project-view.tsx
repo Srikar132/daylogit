@@ -18,6 +18,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { GlobalToolbar } from "@/components/docs/global-toolbar";
 import { PageSheet } from "@/components/docs/page-sheet";
+import { Button } from "@/components/ui/button";
 import {
   createDocPage,
   deleteDocPage,
@@ -176,26 +177,28 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
   }
 
   return (
-    <div className="flex h-screen flex-col bg-[#1e1f20] text-[#e8eaed]">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-[#131314] px-3 sm:gap-3 sm:px-4 print:hidden">
-        <button
+    <div className="flex h-screen flex-col bg-card text-foreground">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-card px-3 sm:gap-3 sm:px-4 print:hidden">
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={() => setSidebarOpen((v) => !v)}
           title="Pages"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed] md:hidden"
+          className="rounded-full text-muted-foreground hover:bg-white/10 hover:text-foreground md:hidden"
         >
           <Menu className="h-4 w-4" />
-        </button>
+        </Button>
         {slug && (
           <Link
             href={`/workspace/${slug}`}
             title="Back to canvas"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-white/10 hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
           </Link>
         )}
-        <h1 className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-[#e8eaed] sm:flex-none sm:text-[14px]">
+        <h1 className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-foreground sm:flex-none sm:text-[14px]">
           {project.title}
         </h1>
 
@@ -207,7 +210,7 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
               target="_blank"
               rel="noopener noreferrer"
               title={link.label ?? link.url}
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed]"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground hover:bg-white/10 hover:text-foreground"
             >
               <GitFork className="h-3.5 w-3.5" />
             </a>
@@ -218,7 +221,7 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
               target="_blank"
               rel="noopener noreferrer"
               title="Live link"
-              className="flex h-7 w-7 items-center justify-center rounded-full text-[#81c995] hover:bg-white/10"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-emerald-400 hover:bg-white/10"
             >
               <ExternalLink className="h-3.5 w-3.5" />
             </a>
@@ -229,38 +232,41 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
           {canWrite && (
             <>
               {isPublic && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={handleCopyShareLink}
                   title="Copy link"
-                  className="flex items-center gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1.5 text-[12px] text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed] cursor-pointer sm:px-3"
+                  className="gap-1.5 rounded-full bg-white/[0.06] px-2.5 py-1.5 text-[12px] text-muted-foreground hover:bg-white/10 hover:text-foreground sm:px-3"
                 >
                   {shareCopied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
                   <span className="hidden sm:inline">{shareCopied ? "Copied" : "Copy link"}</span>
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={handleShareToggle}
-                className={`rounded-full px-2.5 py-1.5 text-[12px] font-medium cursor-pointer sm:px-3.5 ${
+                className={`rounded-full px-2.5 py-1.5 text-[12px] font-medium sm:px-3.5 ${
                   isPublic
-                    ? "bg-[#81c995]/15 text-[#81c995] hover:bg-[#81c995]/25"
-                    : "bg-white/[0.06] text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed]"
+                    ? "bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25"
+                    : "bg-white/[0.06] text-muted-foreground hover:bg-white/10 hover:text-foreground"
                 }`}
               >
                 {isPublic ? "Shared" : "Share"}
-              </button>
+              </Button>
             </>
           )}
-          <button
+          <Button
             type="button"
+            variant="default"
             onClick={() => window.print()}
             title="Export PDF"
-            className="flex items-center gap-1.5 rounded-full bg-[#8ab4f8] px-2.5 py-1.5 text-[12px] font-semibold text-[#141414] hover:bg-[#a6c8ff] cursor-pointer sm:px-3.5"
+            className="gap-1.5 rounded-full bg-primary px-2.5 py-1.5 text-[12px] font-semibold text-primary-foreground hover:bg-primary/80 sm:px-3.5"
           >
             <Printer className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Export PDF</span>
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -275,7 +281,7 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
         )}
 
         <div
-          className={`fixed inset-y-14 left-0 z-30 flex w-64 flex-col border-r border-white/[0.06] bg-[#131314] transition-transform duration-200 md:static md:inset-y-auto md:z-auto md:w-56 md:translate-x-0 md:transition-none print:hidden ${
+          className={`fixed inset-y-14 left-0 z-30 flex w-64 flex-col border-r border-white/[0.06] bg-card transition-transform duration-200 md:static md:inset-y-auto md:z-auto md:w-56 md:translate-x-0 md:transition-none print:hidden ${
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
@@ -286,36 +292,39 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
                 onClick={() => scrollToPage(page.id)}
                 className={`group flex items-center gap-1.5 rounded-lg px-2.5 py-2 cursor-pointer ${
                   page.id === activePageId
-                    ? "bg-white/10 text-[#e8eaed]"
-                    : "text-[#9aa0a6] hover:bg-white/5"
+                    ? "bg-white/10 text-foreground"
+                    : "text-muted-foreground hover:bg-white/5"
                 }`}
               >
                 <FileText className="h-3.5 w-3.5 shrink-0" />
                 <span className="min-w-0 flex-1 truncate text-[13px]">{page.title}</span>
                 {canWrite && pages.length > 1 && (
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={(e) => {
                       e.stopPropagation();
                       void handleDeletePage(page.id);
                     }}
-                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[#5f6368] opacity-0 hover:text-[#f28b82] group-hover:opacity-100 cursor-pointer"
+                    className="h-4 w-4 shrink-0 rounded text-muted-foreground opacity-0 hover:bg-transparent hover:text-destructive group-hover:opacity-100"
                   >
                     <X className="h-3 w-3" />
-                  </button>
+                  </Button>
                 )}
               </div>
             ))}
           </div>
           {canWrite && (
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => addPageMutation.mutate()}
               disabled={addPageMutation.isPending}
-              className="flex items-center gap-1.5 border-t border-white/[0.06] px-3 py-2.5 text-[12.5px] text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed] cursor-pointer disabled:opacity-50"
+              className="justify-start gap-1.5 rounded-none border-t border-white/[0.06] px-3 py-2.5 text-[12.5px] text-muted-foreground hover:bg-white/5 hover:text-foreground"
             >
               <Plus className="h-3.5 w-3.5" /> Add page
-            </button>
+            </Button>
           )}
         </div>
 
@@ -325,7 +334,7 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
             document (created via "+ Add page" in the sidebar), styled as a
             Letter-proportioned sheet but growing naturally with content —
             actual pagination only happens at export/print time. */}
-        <div className="min-h-0 flex-1 overflow-y-auto bg-[#1e1f20] px-3 py-6 sm:px-6 sm:py-10 print:overflow-visible print:bg-white print:p-0">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-card px-3 py-6 sm:px-6 sm:py-10 print:overflow-visible print:bg-white print:p-0">
           <div className="mx-auto flex w-full max-w-[816px] flex-col gap-6 sm:gap-10 print:gap-0">
             {pages.map((page) => (
               <div key={page.id} className="print:break-after-page">
@@ -335,7 +344,7 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
                   onChange={(e) => handlePageTitleChange(page.id, e.target.value)}
                   placeholder="Untitled"
                   disabled={!canWrite}
-                  className="mb-2 w-full truncate bg-transparent text-[11.5px] font-medium uppercase tracking-wider text-[#5f6368] outline-none placeholder:text-[#5f6368] focus:text-[#9aa0a6] disabled:cursor-default print:hidden"
+                  className="mb-2 w-full truncate bg-transparent text-[11.5px] font-medium uppercase tracking-wider text-muted-foreground outline-none placeholder:text-muted-foreground focus:text-muted-foreground disabled:cursor-default print:hidden"
                 />
                 <PageSheet
                   page={page}

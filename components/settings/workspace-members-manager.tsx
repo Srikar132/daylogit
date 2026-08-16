@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, AlertTriangle, Loader2, Mail, Pencil, Trash2, UserMinus, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   cancelInvitationAction,
   getWorkspaceMembersData,
@@ -165,7 +166,7 @@ export function WorkspaceMembersManager({
   return (
     <div className="flex flex-col gap-6">
       {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-[#f28b82]/30 bg-[#f28b82]/10 px-3 py-2 text-[12.5px] text-[#f28b82]">
+        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-[12.5px] text-destructive">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           <span>{error}</span>
         </div>
@@ -173,41 +174,43 @@ export function WorkspaceMembersManager({
 
       {canManage && (
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-[11.5px] font-medium uppercase tracking-wide text-[#5f6368]">Workspace name</h3>
+          <h3 className="text-[11.5px] font-medium uppercase tracking-wide text-muted-foreground">Workspace name</h3>
           <div className="flex gap-2">
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-9 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[13px] text-[#e8eaed] outline-none focus:border-[#8ab4f8]/50"
+              className="h-9 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[13px] text-foreground outline-none focus:border-primary/50"
             />
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="lg"
               onClick={handleRename}
               disabled={isPending || !name.trim() || name.trim() === organizationName}
-              className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3.5 text-[12.5px] font-medium text-[#e8eaed] hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              className="shrink-0 gap-1.5 border-white/[0.08] bg-white/[0.04] px-3.5 text-[12.5px] font-medium text-foreground hover:bg-white/10"
             >
               {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
               Save
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {canManage && (
         <div className="flex flex-col gap-2">
-          <h3 className="text-[11.5px] font-medium uppercase tracking-wide text-[#5f6368]">Invite</h3>
+          <h3 className="text-[11.5px] font-medium uppercase tracking-wide text-muted-foreground">Invite</h3>
           <div className="flex gap-2">
             <input
               type="email"
               placeholder="teammate@company.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-9 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[13px] text-[#e8eaed] placeholder:text-[#5f6368] outline-none focus:border-[#8ab4f8]/50"
+              className="h-9 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50"
             />
             <select
               disabled
-              className="h-9 shrink-0 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2.5 text-[12.5px] text-[#9aa0a6]"
+              className="h-9 shrink-0 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2.5 text-[12.5px] text-muted-foreground"
             >
               {ACCESS_LEVELS.map((level) => (
                 <option key={level.value} disabled={!level.enabled}>
@@ -215,44 +218,48 @@ export function WorkspaceMembersManager({
                 </option>
               ))}
             </select>
-            <button
+            <Button
               type="button"
+              variant="default"
+              size="lg"
               onClick={handleInvite}
               disabled={isPending || !email.trim()}
-              className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-gradient-to-b from-[#9dc4ff] to-[#8ab4f8] px-3.5 text-[12.5px] font-semibold text-[#141414] shadow-[0_2px_8px_rgba(138,180,248,0.35)] transition-transform hover:brightness-105 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              className="shrink-0 gap-1.5 px-3.5 text-[12.5px] font-semibold active:scale-[0.98]"
             >
               {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
               Invite
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {canManage && invitations.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          <h3 className="text-[11.5px] font-medium uppercase tracking-wide text-[#5f6368]">Pending invites</h3>
+          <h3 className="text-[11.5px] font-medium uppercase tracking-wide text-muted-foreground">Pending invites</h3>
           {invitations.map((invite) => (
             <div
               key={invite.id}
               className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
             >
-              <span className="truncate text-[13px] text-[#9aa0a6]">{invite.email}</span>
-              <button
+              <span className="truncate text-[13px] text-muted-foreground">{invite.email}</span>
+              <Button
                 type="button"
+                variant="destructive"
+                size="icon-sm"
                 onClick={() => handleCancelInvite(invite.id)}
                 disabled={isPending}
                 title="Cancel invite"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#f28b82]/10 hover:text-[#f28b82]"
+                className="rounded-full"
               >
                 <X className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             </div>
           ))}
         </div>
       )}
 
       <div className="flex flex-col gap-1.5">
-        <h3 className="text-[11.5px] font-medium uppercase tracking-wide text-[#5f6368]">
+        <h3 className="text-[11.5px] font-medium uppercase tracking-wide text-muted-foreground">
           {members.length} member{members.length === 1 ? "" : "s"}
         </h3>
         {members.map((member) => {
@@ -263,29 +270,31 @@ export function WorkspaceMembersManager({
               key={member.id}
               className="flex items-center gap-3 rounded-xl border border-white/[0.06] px-3 py-2.5"
             >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#8ab4f8]/15 text-[12.5px] font-semibold text-[#8ab4f8]">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[12.5px] font-semibold text-primary">
                 {initialOf(member.user.name, member.user.email)}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13px] font-medium text-[#e8eaed]">
+                <div className="truncate text-[13px] font-medium text-foreground">
                   {member.user.name}
-                  {isSelf && <span className="ml-1.5 text-[11.5px] font-normal text-[#5f6368]">(you)</span>}
+                  {isSelf && <span className="ml-1.5 text-[11.5px] font-normal text-muted-foreground">(you)</span>}
                 </div>
-                <div className="truncate text-[11.5px] text-[#5f6368]">{member.user.email}</div>
+                <div className="truncate text-[11.5px] text-muted-foreground">{member.user.email}</div>
               </div>
-              <span className="shrink-0 rounded-full border border-white/[0.06] px-2 py-0.5 text-[11px] capitalize text-[#9aa0a6]">
+              <span className="shrink-0 rounded-full border border-white/[0.06] px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
                 {member.role}
               </span>
               {canRemove && (
-                <button
+                <Button
                   type="button"
+                  variant="destructive"
+                  size="icon-sm"
                   onClick={() => handleRemoveMember(member.id)}
                   disabled={isPending}
                   title="Remove member"
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#9aa0a6] hover:bg-[#f28b82]/10 hover:text-[#f28b82]"
+                  className="rounded-full"
                 >
                   <UserMinus className="h-3.5 w-3.5" />
-                </button>
+                </Button>
               )}
             </div>
           );
@@ -293,25 +302,27 @@ export function WorkspaceMembersManager({
       </div>
 
       {canDelete && (
-        <div className="flex flex-col gap-2 rounded-xl border border-[#f28b82]/25 bg-[#f28b82]/[0.04] p-3">
-          <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-[#f28b82]">
+        <div className="flex flex-col gap-2 rounded-xl border border-destructive/25 bg-destructive/[0.04] p-3">
+          <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-destructive">
             <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
             Danger zone
           </div>
 
           {!deleteConfirmOpen ? (
-            <button
+            <Button
               type="button"
+              variant="destructive"
+              size="default"
               onClick={() => setDeleteConfirmOpen(true)}
-              className="flex h-8 w-fit items-center gap-1.5 rounded-lg border border-[#f28b82]/30 px-3 text-[12.5px] font-medium text-[#f28b82] hover:bg-[#f28b82]/10"
+              className="w-fit gap-1.5 px-3 text-[12.5px] font-medium"
             >
               <Trash2 className="h-3.5 w-3.5" />
               Delete workspace
-            </button>
+            </Button>
           ) : (
             <div className="flex flex-col gap-2">
-              <p className="text-[12px] text-[#9aa0a6]">
-                This deletes <span className="font-medium text-[#e8eaed]">{organizationName}</span> and everything in
+              <p className="text-[12px] text-muted-foreground">
+                This deletes <span className="font-medium text-foreground">{organizationName}</span> and everything in
                 it, for everyone. Type the workspace name to confirm.
               </p>
               <input
@@ -319,28 +330,32 @@ export function WorkspaceMembersManager({
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
                 placeholder={organizationName}
-                className="h-9 rounded-lg border border-[#f28b82]/30 bg-white/[0.04] px-3 text-[13px] text-[#e8eaed] outline-none focus:border-[#f28b82]/60"
+                className="h-9 rounded-lg border border-destructive/30 bg-white/[0.04] px-3 text-[13px] text-foreground outline-none focus:border-destructive/60"
               />
               <div className="flex gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="destructive"
+                  size="default"
                   onClick={handleDelete}
                   disabled={isPending || deleteConfirmText !== organizationName}
-                  className="flex h-8 items-center gap-1.5 rounded-lg bg-[#f28b82] px-3 text-[12.5px] font-semibold text-[#141414] disabled:cursor-not-allowed disabled:opacity-40"
+                  className="gap-1.5 px-3 text-[12.5px] font-semibold"
                 >
                   {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                   Delete forever
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="default"
                   onClick={() => {
                     setDeleteConfirmOpen(false);
                     setDeleteConfirmText("");
                   }}
-                  className="flex h-8 items-center rounded-lg px-3 text-[12.5px] font-medium text-[#9aa0a6] hover:bg-white/5"
+                  className="px-3 text-[12.5px] font-medium text-muted-foreground"
                 >
                   Cancel
-                </button>
+                </Button>
               </div>
             </div>
           )}

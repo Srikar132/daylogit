@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getRequestIdentity } from "@/lib/api-auth";
-import { getEntryById } from "@/lib/worklog";
+import { canWriteEntries } from "@/lib/permissions";
+import { getEntryById, softDeleteEntry } from "@/lib/worklog";
 
 const paramsSchema = z.object({ id: z.string().uuid() });
 
@@ -28,4 +29,27 @@ export async function GET(
   }
 
   return NextResponse.json(entry);
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const identity = await getRequestIdentity(request);
+  if (!identity) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!canWriteEntries(identity.role)) {
+    return NextResponse.json({ error: "View-only access" }, { status: 403 });
+  }
+
+  const parsed = paramsSchema.safeParse(await params);
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid entry id" }, { status: 400 });
+  }
+
+  const deleted = await softDeleteEntry(identity.organizationId, parsed.data.id);
+  if (!deleted) {
+    return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ success: true });
 }

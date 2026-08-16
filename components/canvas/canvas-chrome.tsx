@@ -46,7 +46,7 @@ function WorkspaceSwitcher() {
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded-full border border-white/[0.06] bg-[#131314]/85 px-2.5 py-1.5 shadow-lg backdrop-blur-md transition-colors hover:bg-[#131314] cursor-pointer"
       >
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#1b6ef3] text-white">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
           <Check className="h-4 w-4 stroke-[3]" />
         </div>
         <span className="max-w-[140px] truncate text-[13px] font-medium text-[#e8eaed]">
@@ -66,7 +66,7 @@ function WorkspaceSwitcher() {
                 className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] text-[#e8eaed] hover:bg-white/5 cursor-pointer"
               >
                 <span className="flex-1 truncate">{org.name}</span>
-                {org.id === activeOrg?.id && <Check className="h-3.5 w-3.5 shrink-0 text-[#8ab4f8]" />}
+                {org.id === activeOrg?.id && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
               </button>
             ))}
           </div>
@@ -77,7 +77,7 @@ function WorkspaceSwitcher() {
                 setOpen(false);
                 router.push("/onboarding");
               }}
-              className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-[13px] text-[#8ab4f8] hover:bg-white/5 cursor-pointer"
+              className="flex w-full items-center gap-2 rounded-xl px-2.5 py-2 text-[13px] text-primary hover:bg-white/5 cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" />
               New workspace
@@ -152,7 +152,14 @@ function UserMenu() {
 
 export function CanvasChrome() {
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-between p-4">
+    <div
+      className="pointer-events-none absolute inset-0 z-20 flex items-start justify-between p-4"
+      style={{
+        paddingTop: "max(1rem, env(safe-area-inset-top))",
+        paddingLeft: "max(1rem, env(safe-area-inset-left))",
+        paddingRight: "max(1rem, env(safe-area-inset-right))",
+      }}
+    >
       <WorkspaceSwitcher />
       <UserMenu />
     </div>

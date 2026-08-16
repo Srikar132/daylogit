@@ -65,13 +65,13 @@ function PendingBookmark({ id, url }: { id: string; url: string }) {
 
   if (error) {
     return (
-      <div className="nodrag flex h-full flex-col items-center justify-center gap-2 rounded-2xl bg-[#131314] p-4 text-center">
-        <AlertCircle className="h-5 w-5 shrink-0 text-[#f28b82]" />
-        <p className="text-[12px] text-[#f28b82]">{error}</p>
+      <div className="nodrag widget-card-shell flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
+        <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
+        <p className="text-[12px] text-destructive">{error}</p>
         <button
           type="button"
           onClick={() => deleteWidget(id)}
-          className="rounded-full px-3 py-1 text-[11.5px] text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed] cursor-pointer"
+          className="rounded-full px-3 py-1 text-[11.5px] text-widget-text-secondary hover:bg-white/5 hover:text-widget-text-primary cursor-pointer"
         >
           Dismiss
         </button>
@@ -83,16 +83,16 @@ function PendingBookmark({ id, url }: { id: string; url: string }) {
   // title/url lines) rather than a generic spinner, so the layout doesn't
   // visibly jump once the real preview lands.
   return (
-    <div className="nodrag flex h-full items-stretch rounded-2xl bg-[#131314]">
-      <div className="flex w-[30%] shrink-0 items-center justify-center rounded-l-2xl border-r border-white/[0.06] bg-white/[0.04]">
-        <Skeleton className="h-8 w-8 rounded-md" />
+    <div className="nodrag widget-card-shell flex h-full items-stretch overflow-hidden">
+      <div className="flex w-[30%] shrink-0 items-center justify-center border-r border-widget-border bg-widget-surface">
+        <Skeleton className="h-8 w-8 rounded-md bg-white/10" />
       </div>
       <div className="flex min-w-0 flex-1 flex-col justify-between gap-2 p-4">
         <div className="flex flex-col gap-2">
-          <Skeleton className="h-3.5 w-3/5" />
-          <Skeleton className="h-3 w-4/5" />
+          <Skeleton className="h-3.5 w-3/5 bg-white/10" />
+          <Skeleton className="h-3 w-4/5 bg-white/10" />
         </div>
-        <Skeleton className="h-2.5 w-2/5" />
+        <Skeleton className="h-2.5 w-2/5 bg-white/10" />
       </div>
     </div>
   );
@@ -126,15 +126,15 @@ function DraftBookmarkForm({ id, canWrite }: { id: string; canWrite: boolean }) 
   return (
     <form
       onSubmit={handleSubmit}
-      className="nodrag nowheel flex h-full flex-col gap-2.5 overflow-y-auto scrollbar-thin rounded-2xl bg-[#131314] p-3.5"
+      className="nodrag nowheel widget-card-shell flex h-full flex-col gap-2.5 overflow-y-auto scrollbar-thin p-3.5"
     >
       <div className="flex items-center gap-2">
-        <Bookmark className="h-4 w-4 shrink-0 text-[#8ab4f8]" />
-        <span className="text-[12.5px] font-medium text-[#e8eaed]">New Bookmark</span>
+        <Bookmark className="h-4 w-4 shrink-0 text-zinc-300" />
+        <span className="text-[12.5px] font-medium text-widget-text-primary">New Bookmark</span>
       </div>
 
       {error && (
-        <div className="flex items-center gap-1.5 rounded-lg border border-[#f28b82]/20 bg-[#f28b82]/10 px-2.5 py-1.5 text-[11.5px] text-[#f28b82]">
+        <div className="flex items-center gap-1.5 rounded-lg border border-destructive/20 bg-destructive/10 px-2.5 py-1.5 text-[11.5px] text-destructive">
           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
           <span>{error}</span>
         </div>
@@ -146,7 +146,7 @@ function DraftBookmarkForm({ id, canWrite }: { id: string; canWrite: boolean }) 
         onChange={(e) => setUrl(e.target.value)}
         placeholder="https://…"
         autoFocus
-        className="rounded-lg border-white/10 bg-white/5 px-2.5 py-1.5 text-[12.5px] text-[#e8eaed] placeholder:text-[#5f6368] focus-visible:ring-[#8ab4f8]"
+        className="rounded-xl border-widget-border bg-widget-surface px-2.5 py-1.5 text-[12.5px] text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-white/30"
       />
 
       <div className="mt-auto flex items-center justify-end gap-2 pt-1">
@@ -154,7 +154,7 @@ function DraftBookmarkForm({ id, canWrite }: { id: string; canWrite: boolean }) 
           <button
             type="button"
             onClick={() => deleteWidget(id)}
-            className="rounded-full px-3 py-1.5 text-[12px] text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed] cursor-pointer"
+            className="rounded-full px-3 py-1.5 text-[12px] text-widget-text-secondary hover:bg-white/5 hover:text-widget-text-primary cursor-pointer"
           >
             Cancel
           </button>
@@ -162,7 +162,7 @@ function DraftBookmarkForm({ id, canWrite }: { id: string; canWrite: boolean }) 
         <button
           type="submit"
           disabled={fetchMutation.isPending}
-          className="flex items-center gap-1.5 rounded-full bg-[#8ab4f8] px-4 py-1.5 text-[12px] font-semibold text-[#141414] shadow-md transition-transform hover:bg-[#a6c8ff] active:scale-95 disabled:opacity-60 cursor-pointer"
+          className="widget-btn-primary flex items-center gap-1.5 px-4 py-1.5 text-[12px] disabled:opacity-60 cursor-pointer"
         >
           {fetchMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {fetchMutation.isPending ? "Fetching…" : "Save"}
@@ -204,10 +204,10 @@ function BookmarkCard({ id, bookmark, canWrite }: { id: string; bookmark: Bookma
           whatever part of the body ISN'T a link/button is a valid drag
           surface). `nodrag` on the <a> itself keeps clicking the link from
           racing against that same drag gesture. */}
-      <ContextMenuTrigger className="group relative flex h-full items-stretch rounded-2xl bg-[#131314]">
+      <ContextMenuTrigger className="group relative widget-card-shell flex h-full items-stretch overflow-hidden">
         {/* Icon band takes the full card height, not just its own row — a
             fixed 30% width column rather than a small inline square. */}
-        <div className="flex w-[30%] shrink-0 items-center justify-center overflow-hidden rounded-l-2xl border-r border-white/[0.06] bg-white/[0.04]">
+        <div className="flex w-[30%] shrink-0 items-center justify-center overflow-hidden rounded-l-2xl border-r border-widget-border bg-widget-surface">
           {hasIcon ? (
             // eslint-disable-next-line @next/next/no-img-element -- arbitrary external domain, next/image needs a fixed allowlist
             <img
@@ -217,7 +217,7 @@ function BookmarkCard({ id, bookmark, canWrite }: { id: string; bookmark: Bookma
               className="h-8 w-8 object-contain"
             />
           ) : (
-            <Bookmark className="h-6 w-6 text-[#8ab4f8]" />
+            <Bookmark className="h-6 w-6 text-zinc-300" />
           )}
         </div>
 
@@ -233,17 +233,17 @@ function BookmarkCard({ id, bookmark, canWrite }: { id: string; bookmark: Bookma
         >
           <div className="min-w-0">
             {error && (
-              <div className="mb-1 flex items-center gap-1.5 text-[11px] text-[#f28b82]">
+              <div className="mb-1 flex items-center gap-1.5 text-[11px] text-destructive">
                 <AlertCircle className="h-3 w-3 shrink-0" />
                 <span className="truncate">{error}</span>
               </div>
             )}
-            <h3 className="truncate pr-6 text-[14px] font-semibold text-[#e8eaed]">{bookmark.title}</h3>
+            <h3 className="truncate pr-6 text-[14px] font-semibold text-widget-text-primary">{bookmark.title}</h3>
             {bookmark.description && (
-              <p className="mt-1 line-clamp-2 text-[12.5px] leading-snug text-[#9aa0a6]">{bookmark.description}</p>
+              <p className="mt-1 line-clamp-2 text-[12.5px] leading-snug text-widget-text-secondary">{bookmark.description}</p>
             )}
           </div>
-          <p className="mt-auto truncate text-[11.5px] text-[#c9b896]">{bookmark.url}</p>
+          <p className="mt-auto truncate text-[11.5px] font-mono text-zinc-400 group-hover:text-zinc-300 transition-colors">{bookmark.url}</p>
         </a>
 
         <button
@@ -255,7 +255,7 @@ function BookmarkCard({ id, bookmark, canWrite }: { id: string; bookmark: Bookma
           }}
           disabled={refreshMutation.isPending}
           title="Refresh preview"
-          className="nodrag absolute right-3 top-3 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#9aa0a6] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/10 hover:text-[#e8eaed] cursor-pointer disabled:opacity-60"
+          className="nodrag absolute right-3 top-3 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-widget-text-secondary opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/10 hover:text-widget-text-primary cursor-pointer disabled:opacity-60"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
         </button>
@@ -265,7 +265,7 @@ function BookmarkCard({ id, bookmark, canWrite }: { id: string; bookmark: Bookma
           <RefreshCw className="h-3.5 w-3.5" /> Refresh preview
         </ContextMenuItem>
         {canWrite && (
-          <ContextMenuItem destructive onClick={() => deleteWidget(id)}>
+          <ContextMenuItem variant="destructive" onClick={() => deleteWidget(id)}>
             <Trash2 className="h-3.5 w-3.5" /> Delete
           </ContextMenuItem>
         )}

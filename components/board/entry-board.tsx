@@ -15,7 +15,6 @@ import {
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useMutation } from "@tanstack/react-query";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { EntryDetailDialog } from "@/components/board/entry-detail-dialog";
@@ -29,19 +28,24 @@ interface EntryBoardProps {
   initialColumns: BoardColumn[];
   onRefresh?: () => void;
   canWrite: boolean;
+  // Lifted up to BoardWidget rather than owned locally here — this component
+  // remounts (via the parent's `key={dataUpdatedAt}`) on every board
+  // refetch (search, filter, drag-move, delete's own refresh, ...), and a
+  // remount resets all local state. If the open-entry id lived here, any
+  // background refetch while the dialog was open would silently close it.
+  openEntryId: string | null;
+  onOpenEntry: (id: string) => void;
+  onCloseEntry: () => void;
 }
 
-export function EntryBoard({ initialColumns, onRefresh, canWrite }: EntryBoardProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  // The dialog's open/closed entry lives in the URL (?entry=<id>), same
-  // convention as ?date= for the day picker — shareable/bookmarkable, and the
-  // browser's own back button closes it. There's still only ever ONE dialog
-  // instance mounted (below); the id just comes from the URL instead of
-  // local state, it doesn't change how many dialogs exist.
-  const openEntryId = searchParams.get("entry");
-
+export function EntryBoard({
+  initialColumns,
+  onRefresh,
+  canWrite,
+  openEntryId,
+  onOpenEntry,
+  onCloseEntry,
+}: EntryBoardProps) {
   // Seeded once from the parent's data and then mutated locally (optimistic
   // drag reorder) — the parent remounts this component (via `key`) whenever
   // it has a genuinely new data set, so this never needs to resync a prop
@@ -54,11 +58,12 @@ export function EntryBoard({ initialColumns, onRefresh, canWrite }: EntryBoardPr
     ? columns.find((c) => c.entries.some((e) => e.id === openEntryId))?.status
     : undefined;
 
-  function pushEntryParam(id: string | null) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (id) params.set("entry", id);
-    else params.delete("entry");
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  function handleEntryDeleted(deletedId: string) {
+    setColumns((prev) =>
+      prev.map((col) => ({ ...col, entries: col.entries.filter((e) => e.id !== deletedId) })),
+    );
+    onCloseEntry();
+    onRefresh?.();
   }
 
   const dragSensors = useSensors(
@@ -158,7 +163,7 @@ export function EntryBoard({ initialColumns, onRefresh, canWrite }: EntryBoardPr
               entries={column.entries}
               isDropTarget={overStatus === status}
               canWrite={canWrite}
-              onOpenEntry={(log) => pushEntryParam(log.id)}
+              onOpenEntry={(log) => onOpenEntry(log.id)}
               onCreated={onRefresh}
             />
           );
@@ -188,7 +193,9 @@ export function EntryBoard({ initialColumns, onRefresh, canWrite }: EntryBoardPr
       <EntryDetailDialog
         entryId={openEntryId}
         statusLabel={openEntryStatus ? STATUS_LABEL[openEntryStatus] : undefined}
-        onClose={() => pushEntryParam(null)}
+        canWrite={canWrite}
+        onClose={onCloseEntry}
+        onDeleted={handleEntryDeleted}
       />
     </DndContext>
   );

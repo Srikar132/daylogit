@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/better-auth";
 import { WorkspaceDashboard } from "@/components/workspace-dashboard";
 import { getBoardData } from "@/lib/worklog";
-import { todayIST } from "@/lib/date";
 import { requireViewerContext } from "@/lib/workspace";
 import { getMyWidgetLayout } from "@/lib/actions/widgets";
 import { getDocProjectsByIds } from "@/lib/actions/docs";
@@ -43,9 +42,10 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
 
   const viewer = await requireViewerContext();
 
-  // Wave 1: independent of each other.
+  // Wave 1: independent of each other. No `date` — the board is a single
+  // unified view across all dates, not scoped to today.
   const [{ columns }, initialLayout] = await Promise.all([
-    getBoardData(viewer.organizationId, { date: todayIST() }),
+    getBoardData(viewer.organizationId, {}),
     getMyWidgetLayout(),
   ]);
 

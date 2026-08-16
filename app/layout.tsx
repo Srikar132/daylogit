@@ -57,6 +57,11 @@ export const viewport: Viewport = {
   colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
+  // Pinch/double-tap are handed fully to the canvas's own zoom (xyflow) and
+  // the widget interaction states — same call Figma/Miro/tldraw make on
+  // mobile, otherwise the browser's own zoom fights the canvas's.
+  maximumScale: 1,
+  userScalable: false,
 };
 
 /* ── Root Layout ──────────────────────────────────────────── */

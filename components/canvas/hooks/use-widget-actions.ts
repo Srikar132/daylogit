@@ -45,6 +45,31 @@ export function useWidgetActions({ ctx, setNodes }: UseWidgetActionsArgs) {
     [setNodes, resizeMutation],
   );
 
+  // Ephemeral interaction state, not persisted — WidgetNode drives this
+  // directly off its own selected/entered state (idle -> selected arms the
+  // card for a repositioning drag; interactive locks it again).
+  const setWidgetDraggable = useCallback(
+    (id: string, draggable: boolean) => {
+      setNodes((current) =>
+        current.map((n) => (n.id === id && n.draggable !== draggable ? { ...n, draggable } : n)),
+      );
+    },
+    [setNodes],
+  );
+
+  // `useReactFlow().updateNode()` writes through xyflow's internal batch
+  // queue, which gets clobbered back to stale by our own controlled `nodes`
+  // prop on the next render — deselecting has to go through the same
+  // `setNodes` pipeline as every other node-array write in this file.
+  const setWidgetSelected = useCallback(
+    (id: string, selected: boolean) => {
+      setNodes((current) =>
+        current.map((n) => (n.id === id && n.selected !== selected ? { ...n, selected } : n)),
+      );
+    },
+    [setNodes],
+  );
+
   // Pending uploads live only in memory — a raw File can't be persisted.
   // Keyed by the widget id it belongs to.
   const pendingFiles = useRef<Map<string, File>>(new Map());
@@ -113,5 +138,15 @@ export function useWidgetActions({ ctx, setNodes }: UseWidgetActionsArgs) {
     [addWidget],
   );
 
-  return { updateWidgetData, deleteWidget, resizeWidget, addWidget, addMediaFiles, getPendingFile, clearPendingFile };
+  return {
+    updateWidgetData,
+    deleteWidget,
+    resizeWidget,
+    setWidgetDraggable,
+    setWidgetSelected,
+    addWidget,
+    addMediaFiles,
+    getPendingFile,
+    clearPendingFile,
+  };
 }

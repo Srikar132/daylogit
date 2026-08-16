@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { db, entries, type TaskStatus } from "@/lib/db";
 import { addDaysIST, todayIST } from "@/lib/date";
 import { isFillerSummary, type WorkType } from "@/lib/constants";
@@ -290,21 +290,24 @@ export type BoardColumn = {
   entries: EntryListItem[];
 };
 
-/** Board for exactly one workspace + date, always exactly the three fixed status columns. */
+/** Board for one workspace, always exactly the three fixed status columns.
+ *  With no `date`, every non-deleted entry across all dates is included —
+ *  the board is a single unified view, not scoped to "today" by default. */
 export async function getBoardData(
   organizationId: string,
   options: {
-    date: string;
+    date?: string;
     search?: string;
+    workTypes?: WorkType[];
   },
 ): Promise<{ columns: BoardColumn[] }> {
-  const targetDate = options.date.trim();
-
-  const conditions = [
-    eq(entries.organizationId, organizationId),
-    isNull(entries.deletedAt),
-    eq(entries.date, targetDate),
-  ];
+  const conditions = [eq(entries.organizationId, organizationId), isNull(entries.deletedAt)];
+  if (options.date && options.date.trim() !== "") {
+    conditions.push(eq(entries.date, options.date.trim()));
+  }
+  if (options.workTypes && options.workTypes.length > 0) {
+    conditions.push(inArray(entries.workType, options.workTypes));
+  }
   if (options.search && options.search.trim() !== "") {
     // Filtering still matches against the full summary text even though it's
     // not part of the selected columns below — Postgres can reference a
@@ -315,7 +318,7 @@ export async function getBoardData(
     }
   }
 
-  const dateEntries: EntryListItem[] = await db
+  const matchedEntries: EntryListItem[] = await db
     .select({
       id: entries.id,
       title: entries.title,
@@ -337,7 +340,7 @@ export async function getBoardData(
     ["completed", []],
   ]);
 
-  dateEntries.forEach((entry) => {
+  matchedEntries.forEach((entry) => {
     byStatus.get(entry.status)?.push(entry);
   });
 

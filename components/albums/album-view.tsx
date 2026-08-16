@@ -17,6 +17,7 @@ import { ArrowLeft, CheckSquare, Folder, FolderPlus, ImagePlus, Images, Menu, X 
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Button } from "@/components/ui/button";
 import {
   createAlbumGroup,
   deleteAlbumGroup,
@@ -267,20 +268,22 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-    <div className="flex h-screen flex-col bg-[#1e1f20] text-[#e8eaed]">
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-[#131314] px-3 sm:gap-3 sm:px-4">
-        <button
+    <div className="flex h-screen flex-col bg-card text-foreground">
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-white/[0.06] bg-popover px-3 sm:gap-3 sm:px-4">
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={() => setSidebarOpen((v) => !v)}
           title="Groups"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed] md:hidden"
+          className="rounded-full text-muted-foreground md:hidden"
         >
           <Menu className="h-4 w-4" />
-        </button>
+        </Button>
         <Link
           href={`/workspace/${slug}`}
           title="Back to canvas"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed]"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-white/10 hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
@@ -290,30 +293,34 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
           onChange={(e) => handleNameChange(e.target.value)}
           disabled={!canWrite}
           placeholder="Untitled album"
-          className="min-w-0 flex-1 truncate rounded-lg bg-transparent px-1.5 -mx-1.5 text-[13.5px] font-semibold text-[#e8eaed] outline-none transition-colors disabled:cursor-default enabled:hover:bg-white/[0.04] focus:bg-white/[0.06] sm:flex-none sm:text-[14px]"
+          className="min-w-0 flex-1 truncate rounded-lg bg-transparent px-1.5 -mx-1.5 text-[13.5px] font-semibold text-foreground outline-none transition-colors disabled:cursor-default enabled:hover:bg-white/[0.04] focus:bg-white/[0.06] sm:flex-none sm:text-[14px]"
         />
-        <span className="flex items-center gap-1 rounded-full bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-[#9aa0a6]">
+        <span className="flex items-center gap-1 rounded-full bg-white/[0.04] px-2.5 py-1 text-[11.5px] text-muted-foreground">
           <Images className="h-3 w-3" />
           {images.length}
         </span>
 
         {images.length > 0 && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             onClick={toggleSelectionMode}
             title="Select photos"
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full cursor-pointer ${
-              selectionMode ? "bg-[#8ab4f8]/15 text-[#8ab4f8]" : "text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed]"
-            }`}
+            className={
+              selectionMode
+                ? "rounded-full bg-primary/15 text-primary hover:bg-primary/15"
+                : "rounded-full text-muted-foreground"
+            }
           >
             <CheckSquare className="h-4 w-4" />
-          </button>
+          </Button>
         )}
 
         {canWrite && (
           <UploadDropzone
             uploadFiles={uploadFiles}
-            className="ml-auto flex items-center gap-1.5 rounded-full bg-[#8ab4f8] px-2.5 py-1.5 text-[12px] font-semibold text-[#141414] shadow-[0_2px_8px_rgba(138,180,248,0.3)] transition-transform hover:bg-[#a6c8ff] active:scale-95 cursor-pointer sm:px-3.5"
+            className="ml-auto flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12px] font-semibold shadow-[0_2px_8px_rgba(138,180,248,0.3)] transition-transform active:scale-95 cursor-pointer sm:px-3.5"
           >
             <ImagePlus className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Add photos</span>
@@ -327,7 +334,7 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
         )}
 
         <div
-          className={`fixed inset-y-14 left-0 z-30 flex w-56 flex-col border-r border-white/[0.06] bg-[#131314] transition-transform duration-200 md:static md:inset-y-auto md:z-auto md:translate-x-0 md:transition-none ${
+          className={`fixed inset-y-14 left-0 z-30 flex w-56 flex-col border-r border-white/[0.06] bg-popover transition-transform duration-200 md:static md:inset-y-auto md:z-auto md:translate-x-0 md:transition-none ${
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
@@ -346,7 +353,7 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
               droppableId={canWrite ? UNGROUPED_DROP_ID : undefined}
               isDropTarget={dropTargetId === UNGROUPED_DROP_ID}
             />
-            <div className="mt-4 mb-1 px-2.5 text-[11px] font-medium uppercase tracking-wider text-[#5f6368]">
+            <div className="mt-4 mb-1 px-2.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               Groups
             </div>
             {groups.map((g) => (
@@ -369,22 +376,24 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
                 value={newGroupName}
                 onChange={(e) => setNewGroupName(e.target.value)}
                 placeholder="New group"
-                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[12px] text-[#e8eaed] placeholder:text-[#5f6368] outline-none focus:border-[#8ab4f8]/50"
+                className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[12px] text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50"
               />
-              <button
+              <Button
                 type="submit"
+                variant="ghost"
+                size="icon-sm"
                 disabled={createGroupMutation.isPending || !newGroupName.trim()}
                 title="Add group"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed] disabled:opacity-40 cursor-pointer"
+                className="rounded-full text-muted-foreground disabled:opacity-40"
               >
                 <FolderPlus className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             </form>
           )}
         </div>
 
         <div
-          className="min-h-0 flex-1 overflow-y-auto bg-[#1e1f20] p-4 sm:p-6"
+          className="min-h-0 flex-1 overflow-y-auto bg-card p-4 sm:p-6"
           onDragOver={(e) => canWrite && e.preventDefault()}
           onDrop={handleDrop}
         >
@@ -446,11 +455,11 @@ export function AlbumView({ slug, album, initialGroups, initialImagesPage, canWr
       createPortal(
         <DragOverlay dropAnimation={null}>
           {draggingImage ? (
-            <div className="relative h-24 w-24 overflow-hidden rounded-2xl border-2 border-[#8ab4f8] shadow-2xl">
+            <div className="relative h-24 w-24 overflow-hidden rounded-2xl border-2 border-primary shadow-2xl">
               {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary external Cloudinary domain */}
               <img src={draggingImage.url} alt="" className="h-full w-full object-cover" />
               {selectedIds.has(draggingImage.id) && selectedIds.size > 1 && (
-                <span className="absolute right-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#8ab4f8] px-1 text-[11px] font-semibold text-[#141414]">
+                <span className="absolute right-1 top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[11px] font-semibold text-primary-foreground">
                   {selectedIds.size}
                 </span>
               )}
@@ -486,10 +495,10 @@ function SidebarRow({
       onClick={onClick}
       className={`flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition-colors ${
         isDropTarget
-          ? "bg-[#8ab4f8]/20 ring-2 ring-[#8ab4f8]/60"
+          ? "bg-primary/20 ring-2 ring-primary/60"
           : active
-            ? "bg-[#8ab4f8]/10 text-[#8ab4f8]"
-            : "text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed]"
+            ? "bg-primary/10 text-primary"
+            : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
       }`}
     >
       <Icon className="h-3.5 w-3.5 shrink-0" />
@@ -538,7 +547,7 @@ function GroupRow({
             setEditing(false);
           }
         }}
-        className="mb-0.5 w-full rounded-lg border border-[#8ab4f8]/40 bg-white/5 px-2.5 py-1.5 text-[13px] text-[#e8eaed] outline-none"
+        className="mb-0.5 w-full rounded-lg border border-primary/40 bg-white/5 px-2.5 py-1.5 text-[13px] text-foreground outline-none"
       />
     );
   }
@@ -550,10 +559,10 @@ function GroupRow({
       onDoubleClick={() => canWrite && setEditing(true)}
       className={`group flex items-center gap-2 rounded-lg px-2.5 py-2 cursor-pointer transition-colors ${
         isDropTarget
-          ? "bg-[#8ab4f8]/20 ring-2 ring-[#8ab4f8]/60"
+          ? "bg-primary/20 ring-2 ring-primary/60"
           : active
-            ? "bg-[#8ab4f8]/10 text-[#8ab4f8]"
-            : "text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed]"
+            ? "bg-primary/10 text-primary"
+            : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
       }`}
     >
       <Folder className="h-3.5 w-3.5 shrink-0" />
@@ -565,7 +574,7 @@ function GroupRow({
             e.stopPropagation();
             onDelete();
           }}
-          className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[#5f6368] opacity-0 hover:text-[#f28b82] group-hover:opacity-100 cursor-pointer"
+          className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100 cursor-pointer"
         >
           <X className="h-3 w-3" />
         </button>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { Button } from "@/components/ui/button";
 
 interface UploadDropzoneProps {
   uploadFiles: (files: FileList | File[]) => void;
@@ -16,9 +17,9 @@ export function UploadDropzone({ uploadFiles, className, children }: UploadDropz
 
   return (
     <>
-      <button type="button" onClick={() => inputRef.current?.click()} className={className}>
+      <Button type="button" onClick={() => inputRef.current?.click()} className={className}>
         {children}
-      </button>
+      </Button>
       <input
         ref={inputRef}
         type="file"

@@ -1,8 +1,7 @@
 "use client";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertCircle, ChevronRight, Images, Trash2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { AlertCircle, ChevronRight, Images, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
@@ -17,10 +16,6 @@ interface GalleryWidgetProps {
   albumId?: string;
   slug?: string;
   canWrite: boolean;
-  /** Server-prefetched (batched for every gallery widget on the canvas at
-   *  once, see app/workspace/[slug]/page.tsx) — same precedent as
-   *  ProjectDocWidget's initialSummary. Absent for a card created after
-   *  that prefetch ran; the query just fetches normally in that case. */
   initialPreview?: AlbumPreview;
 }
 
@@ -31,8 +26,6 @@ export function GalleryWidget({ id, albumId, slug, canWrite, initialPreview }: G
   return <GalleryCard id={id} albumId={albumId} slug={slug} canWrite={canWrite} initialPreview={initialPreview} />;
 }
 
-/** Same "starts as an inline form, becomes the card on submit" shape as
- *  ProjectDocWidget/BookmarkWidget — no modal, no separate creation step. */
 function DraftAlbumForm({ id, canWrite }: { id: string; canWrite: boolean }) {
   const { updateWidgetData, deleteWidget } = useCanvasActions();
   const [name, setName] = useState("");
@@ -55,34 +48,47 @@ function DraftAlbumForm({ id, canWrite }: { id: string; canWrite: boolean }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="nodrag nowheel flex h-full flex-col gap-2.5 overflow-y-auto scrollbar-thin p-3.5">
-      <div className="flex items-center gap-2">
-        <Images className="h-4 w-4 shrink-0 text-[#8ab4f8]" />
-        <span className="text-[12.5px] font-medium text-[#e8eaed]">New Gallery</span>
+    <form
+      onSubmit={handleSubmit}
+      className="nodrag nowheel relative flex h-full flex-col justify-between overflow-hidden rounded-2xl bg-[#121316]/95 p-4 border border-white/[0.1] backdrop-blur-xl shadow-2xl"
+    >
+      <div className="absolute -top-12 -left-12 h-32 w-32 rounded-full bg-blue-500/15 blur-2xl pointer-events-none" />
+      <div className="absolute -bottom-12 -right-12 h-32 w-32 rounded-full bg-indigo-500/15 blur-2xl pointer-events-none" />
+
+      <div className="relative z-10 flex flex-col gap-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10 border border-white/15 shadow-inner">
+            <Images className="h-4 w-4 text-white" />
+          </div>
+          <div>
+            <h3 className="text-[13px] font-semibold text-[#e8eaed]">New Gallery</h3>
+            <p className="text-[11px] text-[#9aa0a6]">Create a photo collection</p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="flex items-center gap-1.5 rounded-xl border border-[#f28b82]/20 bg-[#f28b82]/10 px-3 py-2 text-[11.5px] text-[#f28b82]">
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        <Input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Workspace Snapshots"
+          autoFocus
+          className="rounded-xl border-white/10 bg-white/[0.04] px-3 py-2 text-[12.5px] text-[#e8eaed] placeholder:text-[#5f6368] focus-visible:ring-1 focus-visible:ring-white/40 focus-visible:border-white/30"
+        />
       </div>
 
-      {error && (
-        <div className="flex items-center gap-1.5 rounded-lg border border-[#f28b82]/20 bg-[#f28b82]/10 px-2.5 py-1.5 text-[11.5px] text-[#f28b82]">
-          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      <Input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Album name"
-        autoFocus
-        className="rounded-lg border-white/10 bg-white/5 px-2.5 py-1.5 text-[12.5px] text-[#e8eaed] placeholder:text-[#5f6368] focus-visible:ring-[#8ab4f8]"
-      />
-
-      <div className="mt-auto flex items-center justify-end gap-2 pt-1">
+      <div className="relative z-10 flex items-center justify-end gap-2 pt-2">
         {canWrite && (
           <button
             type="button"
             onClick={() => deleteWidget(id)}
-            className="rounded-full px-3 py-1.5 text-[12px] text-[#9aa0a6] hover:bg-white/5 hover:text-[#e8eaed] cursor-pointer"
+            className="rounded-full px-3.5 py-1.5 text-[12px] font-medium text-widget-text-secondary hover:bg-white/[0.06] hover:text-widget-text-primary transition-colors cursor-pointer"
           >
             Cancel
           </button>
@@ -90,28 +96,15 @@ function DraftAlbumForm({ id, canWrite }: { id: string; canWrite: boolean }) {
         <button
           type="submit"
           disabled={createMutation.isPending}
-          className="rounded-full bg-[#8ab4f8] px-4 py-1.5 text-[12px] font-semibold text-[#141414] shadow-md transition-transform hover:bg-[#a6c8ff] active:scale-95 disabled:opacity-60 cursor-pointer"
+          className="widget-btn-primary inline-flex items-center gap-1.5 px-4 py-1.5 text-[12px] disabled:opacity-60 cursor-pointer"
         >
-          {createMutation.isPending ? "Creating…" : "Create"}
+          <Plus className="h-3.5 w-3.5" />
+          {createMutation.isPending ? "Creating…" : "Create Gallery"}
         </button>
       </div>
     </form>
   );
 }
-
-// Back-to-front: position 0 renders first (furthest back), position 2 last
-// (frontmost, flattest) — the "photos peeking out of a pocket" look.
-const FAN_TRANSFORMS = [
-  { rotate: 9, x: 26 },
-  { rotate: -7, x: -22 },
-  { rotate: 1, x: 2 },
-];
-
-// A flat pocket shape with a shallow valley notch at top-center — where the
-// fanned photos poke through — rising back up to rounded shoulders at each
-// top corner. Stretches to fill the card (preserveAspectRatio="none").
-const POCKET_PATH =
-  "M0,100 L0,26 C0,12 10,4 24,6 C55,10 78,34 100,34 C122,34 145,10 176,6 C190,4 200,12 200,26 L200,100 Z";
 
 function GalleryCard({
   id,
@@ -150,36 +143,36 @@ function GalleryCard({
 
   if (isLoading) {
     return (
-      <div className="flex h-full flex-col gap-3 p-4">
-        <Skeleton className="h-28 w-full rounded-2xl" />
-        <Skeleton className="h-3.5 w-2/5" />
-        <Skeleton className="mt-auto h-8 w-8 rounded-full" />
+      <div className="flex h-full flex-col justify-between rounded-2xl bg-[#121316] p-3 border border-white/[0.08]">
+        <Skeleton className="h-36 w-full rounded-xl" />
+        <div className="flex items-center justify-between pt-2">
+          <div className="space-y-1.5">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+          <Skeleton className="h-8 w-8 rounded-full" />
+        </div>
       </div>
     );
   }
 
   if (isError || !preview) {
     return (
-      <div className="flex h-full items-center justify-center gap-1.5 p-4 text-center text-[12px] text-[#f28b82]">
-        <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-        Couldn&apos;t load this gallery.
+      <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center text-[12px] text-[#f28b82] rounded-2xl bg-[#121316] border border-[#f28b82]/20">
+        <AlertCircle className="h-5 w-5 opacity-80" />
+        <span>Couldn&apos;t load this gallery.</span>
       </div>
     );
   }
 
-  const { name, count, images } = preview;
-  // Oldest-of-the-three first so it renders furthest back, matching
-  // FAN_TRANSFORMS' back-to-front order — `images` itself is newest-first.
-  const fanned = [...images].reverse();
-
   return (
     <ContextMenu>
       <ContextMenuTrigger className="block h-full rounded-2xl">
-        <GalleryCardBody name={name} count={count} fanned={fanned} slug={slug} albumId={albumId} />
+        <GalleryCardBody preview={preview} slug={slug} albumId={albumId} />
       </ContextMenuTrigger>
       <ContextMenuContent>
         {canWrite && (
-          <ContextMenuItem destructive onClick={handleDeleteGallery}>
+          <ContextMenuItem variant="destructive" onClick={handleDeleteGallery}>
             <Trash2 className="h-3.5 w-3.5" /> Delete gallery
           </ContextMenuItem>
         )}
@@ -189,63 +182,92 @@ function GalleryCard({
 }
 
 function GalleryCardBody({
-  name,
-  count,
-  fanned,
+  preview,
   slug,
   albumId,
 }: {
-  name: string;
-  count: number;
-  fanned: AlbumPreview["images"];
+  preview: AlbumPreview;
   slug?: string;
   albumId: string;
 }) {
-  return (
-    <div className="flex h-full flex-col gap-3 rounded-2xl bg-[#1b1c1e] p-4">
-      <div className="relative flex h-28 shrink-0 items-end justify-center overflow-hidden rounded-xl">
-        <svg viewBox="0 0 200 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full text-[#26272a]">
-          <path d={POCKET_PATH} fill="currentColor" />
-        </svg>
+  const { name, count, images } = preview;
+  const coverImg = images && images.length > 0 ? images[0].url : null;
+  const subImages = images && images.length > 1 ? images.slice(1) : [];
+  const extraCount = count > images.length ? count - images.length : 0;
 
-        {fanned.length === 0 ? (
-          <div className="relative z-10 mb-3 flex h-12 w-12 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-[#8a8f98]">
-            <Images className="h-5 w-5" />
-          </div>
+  return (
+    <div className="group relative widget-card-shell flex h-full w-full flex-col justify-between overflow-hidden p-2.5">
+      {/* Hero Cover Frame */}
+      <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl bg-widget-surface">
+        {coverImg ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={coverImg}
+              alt={name}
+              className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+            />
+            {/* Bottom Gradient Fade */}
+            <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0e1117] via-[#0e1117]/50 to-transparent pointer-events-none" />
+          </>
         ) : (
-          <div className="relative flex h-full w-full items-center justify-center">
-            {fanned.map((img, i) => {
-              const t = FAN_TRANSFORMS[FAN_TRANSFORMS.length - fanned.length + i] ?? FAN_TRANSFORMS[2];
-              return (
-                <motion.div
-                  key={img.id}
-                  initial={false}
-                  whileHover={{ y: -4 }}
-                  style={{ zIndex: i, rotate: t.rotate, x: t.x }}
-                  className="absolute h-[74px] w-[54px] overflow-hidden rounded-md border-2 border-[#1b1c1e] shadow-md"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary external Cloudinary domain */}
-                  <img src={img.url} alt="" className="h-full w-full object-cover" />
-                </motion.div>
-              );
-            })}
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-[#161b22] to-[#0e1117] p-4 text-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.04] text-zinc-300">
+              <Images className="h-5 w-5 opacity-75" />
+            </div>
+            <span className="text-[11.5px] font-medium text-widget-text-secondary">Empty Gallery</span>
+          </div>
+        )}
+
+        {/* Top-Right Glass Badge: Photo Count */}
+        <div className="absolute top-2.5 right-2.5 widget-badge-glass flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium shadow-lg">
+          <Images className="h-3 w-3 text-zinc-300" />
+          <span>{count}</span>
+        </div>
+
+        {/* Overlapping Thumbnails Stack (Bottom Left of Hero) */}
+        {subImages.length > 0 && (
+          <div className="absolute bottom-2.5 left-2.5 flex items-center">
+            {subImages.map((img, i) => (
+              <div
+                key={img.id}
+                style={{ zIndex: subImages.length - i }}
+                className={`relative h-7 w-7 overflow-hidden rounded-full border-2 border-widget-bg shadow-md transition-transform group-hover:scale-105 ${
+                  i > 0 ? "-ml-2.5" : ""
+                }`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={img.url} alt="" className="h-full w-full object-cover" />
+              </div>
+            ))}
+
+            {extraCount > 0 && (
+              <div
+                style={{ zIndex: 0 }}
+                className="-ml-2.5 flex h-7 min-w-7 items-center justify-center rounded-full border-2 border-widget-bg bg-widget-surface px-1.5 text-[10px] font-bold text-zinc-300 shadow-md backdrop-blur-md"
+              >
+                +{extraCount}
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      <div className="flex min-w-0 items-end gap-2">
+      {/* Footer Info & Action Bar */}
+      <div className="relative z-10 flex items-center justify-between gap-3 px-1 pt-2.5 pb-0.5">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-[14px] font-semibold text-[#e8eaed]">{name}</h3>
-          <div className="mt-1 flex items-center gap-1 text-[11.5px] text-[#8a8f98]">
-            <Images className="h-3 w-3 shrink-0" />
-            <span>{count}</span>
-          </div>
+          <h3 className="truncate text-[13.5px] font-semibold text-widget-text-primary group-hover:text-white transition-colors">
+            {name}
+          </h3>
+          <p className="text-[11px] font-medium text-widget-text-secondary">
+            {count} {count === 1 ? "photo" : "photos"}
+          </p>
         </div>
 
         <Link
           href={slug ? `/workspace/${slug}/albums/${albumId}` : "#"}
           title="Open gallery"
-          className="nodrag flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-[#c8ccd2] shadow-sm transition-colors hover:border-white/[0.16] hover:bg-white/10 hover:text-[#e8eaed] cursor-pointer"
+          className="nodrag widget-btn-glass flex h-8 w-8 shrink-0 items-center justify-center cursor-pointer"
         >
           <ChevronRight className="h-4 w-4" />
         </Link>
@@ -253,3 +275,5 @@ function GalleryCardBody({
     </div>
   );
 }
+
+

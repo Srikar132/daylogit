@@ -6,6 +6,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import { useState } from "react";
 import { Toaster } from "@/components/ui/toast";
+import { toastManager } from "@/lib/toast";
 
 // Bump this whenever a persisted query's shape changes incompatibly — it
 // invalidates every previously-persisted cache instead of a client hydrating
@@ -77,13 +78,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
           // Mutations should never "resume" from a stale reload — only
           // queries (read caches) get persisted.
           shouldDehydrateMutation: () => false,
+          // "board" used to be naturally cache-busted by a `date` key that
+          // changed every day; now that the board shows all dates unscoped,
+          // that key is static, so a persisted-but-stale board query would
+          // otherwise shadow fresh SSR data on the next reload indefinitely.
           shouldDehydrateQuery: (query) =>
-            query.state.status === "success" && query.queryKey[0] !== "gmailMessages",
+            query.state.status === "success" &&
+            query.queryKey[0] !== "gmailMessages" &&
+            query.queryKey[0] !== "board",
         },
       }}
     >
       {children}
-      <Toaster />
+      <Toaster toastManager={toastManager} />
       {process.env.NODE_ENV === "development" && <ReactQueryDevtools initialIsOpen={false} />}
     </PersistQueryClientProvider>
   );

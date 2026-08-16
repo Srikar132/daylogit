@@ -42,7 +42,16 @@ export const AUTO_HEIGHT_MIN: Record<string, number> = { markdown: 240, "project
 // would otherwise block the whole point of this widget.
 // Project-doc, bookmark, and gallery cards only have link clicks + small
 // buttons, nothing that needs entered-mode's inline-typing gating either.
-export const ALWAYS_INTERACTIVE_WIDGET_TYPES = new Set(["media", "project-doc", "bookmark", "gallery"]);
+// Board needs this too — search input, filter dropdown, and dnd-kit card
+// drag-and-drop all need to work on first touch, not after a double-click.
+export const ALWAYS_INTERACTIVE_WIDGET_TYPES = new Set([
+  "media",
+  "project-doc",
+  "bookmark",
+  "gallery",
+  "mail-summary",
+  "board",
+]);
 
 // Fixed 3-column board — wide enough that all three "To Do / In Progress /
 // Completed" columns are visible without horizontal scroll on a typical
@@ -153,6 +162,10 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
     width: item.width,
     height,
     dragHandle: undefined,
+    // Idle by default — a drag starting on an unselected widget falls
+    // through to the pane's own pan instead of moving the card. WidgetNode
+    // flips this to `true` once the widget is single-clicked (selected).
+    draggable: false,
     data: data as unknown as Record<string, unknown>,
   };
 }
