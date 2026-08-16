@@ -70,8 +70,17 @@ function CanvasInner({
   );
 
   const { nodes, setNodes, onNodesChange, saveFailed } = useWidgetLayout(initialLayout, ctx);
-  const { updateWidgetData, deleteWidget, resizeWidget, addWidget, addMediaFiles, getPendingFile, clearPendingFile } =
-    useWidgetActions({ ctx, setNodes });
+  const {
+    updateWidgetData,
+    deleteWidget,
+    resizeWidget,
+    setWidgetDraggable,
+    setWidgetSelected,
+    addWidget,
+    addMediaFiles,
+    getPendingFile,
+    clearPendingFile,
+  } = useWidgetActions({ ctx, setNodes });
 
   const { screenToFlowPosition } = useReactFlow();
   const { dndSensors, draggingType, handleDragStart, handleDragEnd } = useToolbarDrag({
@@ -94,7 +103,15 @@ function CanvasInner({
     // and the client hydration pass, causing a hydration mismatch warning.
     <DndContext id="canvas-widget-toolbar" sensors={dndSensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <CanvasActionsProvider
-        value={{ updateWidgetData, deleteWidget, getPendingFile, clearPendingFile, resizeWidget }}
+        value={{
+          updateWidgetData,
+          deleteWidget,
+          getPendingFile,
+          clearPendingFile,
+          resizeWidget,
+          setWidgetDraggable,
+          setWidgetSelected,
+        }}
       >
         <div className="h-full w-full" onDragOver={handleDragOverCanvas} onDrop={handleDropOnCanvas}>
           <ReactFlow
@@ -114,7 +131,10 @@ function CanvasInner({
             onlyRenderVisibleElements
           >
             <Controls className="overflow-hidden !rounded-xl !border !border-white/[0.06]" showInteractive={false} />
-            <MiniMap className="!rounded-xl !border !border-white/[0.06]" />
+            {/* Fixed-pixel minimap eats too much of a phone screen to be
+                worth the nav benefit there — hidden below md, same call
+                Miro/tldraw make on mobile. */}
+            <MiniMap className="hidden !rounded-xl !border !border-white/[0.06] md:block" />
           </ReactFlow>
         </div>
       </CanvasActionsProvider>
@@ -122,7 +142,7 @@ function CanvasInner({
       <WidgetToolbar canWrite={canWrite} />
 
       {saveFailed && (
-        <div className="pointer-events-none fixed bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-full border border-[#f28b82]/30 bg-[#131314]/95 px-4 py-2 text-[12.5px] text-[#f28b82] shadow-2xl backdrop-blur-md">
+        <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2 rounded-full border border-destructive/30 bg-popover/95 px-4 py-2 text-[12.5px] text-destructive shadow-2xl backdrop-blur-md">
           Couldn&apos;t save your changes — check your connection.
         </div>
       )}

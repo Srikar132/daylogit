@@ -5,6 +5,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import { Plus } from "lucide-react";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { CreateTaskForm } from "@/components/board/create-task-form";
 import { LogCardContent } from "@/components/board/log-card";
 import { getWorkTypeColor } from "@/components/board/work-type-icon";
@@ -61,7 +62,12 @@ function DraggableLogItem({
       onClick={() => onOpen?.(log)}
       {...attributes}
       {...listeners}
-      className="flex w-full cursor-pointer flex-col gap-1 rounded-lg border border-white/[0.06] border-l-[3px] bg-white/[0.03] px-2.5 py-2 text-left shadow-sm transition-colors hover:border-white/[0.1] hover:bg-white/[0.06] touch-none select-none"
+      // `nodrag` — without it, a press-and-drag gesture starting on this
+      // card is captured by xyflow (moving/panning the whole canvas widget)
+      // before dnd-kit's own sensor ever sees it, since this card lives
+      // inside a canvas node. `nodrag` tells xyflow to leave pointer events
+      // here alone entirely, so dnd-kit is the only thing driving the drag.
+      className="nodrag flex w-full cursor-pointer flex-col gap-1 rounded-lg border border-white/[0.06] border-l-[3px] bg-white/[0.03] px-2.5 py-2 text-left shadow-sm transition-colors hover:border-white/[0.1] hover:bg-white/[0.06] touch-none select-none"
     >
       <LogCardContent log={log} />
     </div>
@@ -85,13 +91,13 @@ export function StatusColumn({
       ref={setNodeRef}
       className={`flex min-w-0 flex-1 flex-col rounded-xl border px-2 py-2 transition-colors ${
         isDropTarget
-          ? "border-[#8ab4f8]/40 bg-[#8ab4f8]/[0.06] ring-1 ring-[#8ab4f8]/40"
+          ? "border-primary/40 bg-primary/[0.06] ring-1 ring-primary/40"
           : "border-white/[0.05] bg-white/[0.015]"
       }`}
     >
       <div className="flex items-center gap-2 border-b border-white/[0.05] px-1 pb-2">
-        <h2 className="truncate text-[13.5px] font-medium text-[#e8eaed]">{label}</h2>
-        <span className="shrink-0 rounded-md bg-white/[0.08] px-1.5 py-0.5 text-[11px] font-medium text-[#9aa0a6]">
+        <h2 className="truncate text-[13.5px] font-medium text-foreground">{label}</h2>
+        <span className="shrink-0 rounded-md bg-white/[0.08] px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">
           {entries.length}
         </span>
       </div>
@@ -117,14 +123,15 @@ export function StatusColumn({
               onCancel={() => setIsCreating(false)}
             />
           ) : (
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => setIsCreating(true)}
-              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] text-[#9aa0a6] hover:bg-white/[0.05] hover:text-[#e8eaed] transition-colors cursor-pointer"
+              className="h-auto justify-start gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] text-muted-foreground hover:text-foreground"
             >
               <Plus className="h-3.5 w-3.5" />
               Create
-            </button>
+            </Button>
           ))}
       </div>
     </div>

@@ -50,7 +50,7 @@ export function WorkspaceDashboard({
   initialWorkspaceMembers,
 }: WorkspaceDashboardProps) {
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-[#1e1f20] text-[#e8eaed] font-sans">
+    <div className="relative h-dvh w-dvw overflow-hidden bg-[#1e1f20] text-[#e8eaed] font-sans">
       <CanvasShell
         slug={slug}
         initialLayout={initialLayout}

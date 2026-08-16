@@ -86,12 +86,12 @@ export function PhotoGrid({
   if (images.length === 0 && pendingUploads.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.03] text-[#5f6368]">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.03] text-muted-foreground">
           <ImageOff className="h-6 w-6" />
         </div>
         <div>
-          <p className="text-[13px] text-[#9aa0a6]">No photos here yet.</p>
-          {canWrite && <p className="mt-0.5 text-[12px] text-[#5f6368]">Drop images anywhere or use &quot;Add photos&quot; above.</p>}
+          <p className="text-[13px] text-muted-foreground">No photos here yet.</p>
+          {canWrite && <p className="mt-0.5 text-[12px] text-muted-foreground">Drop images anywhere or use &quot;Add photos&quot; above.</p>}
         </div>
       </div>
     );
@@ -118,7 +118,7 @@ export function PhotoGrid({
         ))}
       </div>
       {hasMore && (
-        <div ref={sentinelRef} className="flex h-16 items-center justify-center text-[12px] text-[#5f6368]">
+        <div ref={sentinelRef} className="flex h-16 items-center justify-center text-[12px] text-muted-foreground">
           {loadingMore ? "Loading more…" : ""}
         </div>
       )}
@@ -128,15 +128,15 @@ export function PhotoGrid({
 
 function PendingTile({ pending, onDismiss }: { pending: PendingUpload; onDismiss: () => void }) {
   return (
-    <div className="relative flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl border border-white/[0.06] bg-[#131314] p-3 text-center">
+    <div className="relative flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl border border-white/[0.06] bg-card p-3 text-center">
       {pending.error ? (
         <>
-          <AlertCircle className="h-4 w-4 shrink-0 text-[#f28b82]" />
-          <p className="text-[11px] text-[#f28b82]">{pending.error}</p>
+          <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+          <p className="text-[11px] text-destructive">{pending.error}</p>
           <button
             type="button"
             onClick={onDismiss}
-            className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-[#9aa0a6] hover:bg-white/10 hover:text-[#e8eaed] cursor-pointer"
+            className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground hover:bg-white/10 hover:text-foreground cursor-pointer"
           >
             <X className="h-3 w-3" />
           </button>
@@ -144,9 +144,9 @@ function PendingTile({ pending, onDismiss }: { pending: PendingUpload; onDismiss
       ) : (
         <>
           <div className="h-1 w-3/5 overflow-hidden rounded-full bg-white/[0.08]">
-            <div className="h-full rounded-full bg-[#8ab4f8] transition-[width] duration-150" style={{ width: `${pending.progress}%` }} />
+            <div className="h-full rounded-full bg-primary transition-[width] duration-150" style={{ width: `${pending.progress}%` }} />
           </div>
-          <p className="text-[11px] text-[#9aa0a6]">Uploading… {pending.progress}%</p>
+          <p className="text-[11px] text-muted-foreground">Uploading… {pending.progress}%</p>
         </>
       )}
     </div>
@@ -213,7 +213,7 @@ function PhotoTile({
       // <body> so it isn't clipped by this grid's own overflow-y-auto once
       // dragged past the container edge toward the sidebar.
       style={{ opacity: isDragging ? 0.3 : 1, touchAction: "none" }}
-      className="group relative aspect-square overflow-hidden rounded-2xl border border-white/[0.06] bg-[#131314] shadow-sm transition-shadow hover:shadow-lg hover:shadow-black/30"
+      className="group relative aspect-square overflow-hidden rounded-2xl border border-white/[0.06] bg-card shadow-sm transition-shadow hover:shadow-lg hover:shadow-black/30"
     >
       {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary external Cloudinary domain */}
       <img
@@ -289,7 +289,7 @@ function PhotoTile({
               )}
               <div className="my-1 h-px bg-white/[0.06]" />
               <DropdownMenuItem
-                destructive
+                variant="destructive"
                 onClick={() => {
                   if (window.confirm("Delete this photo? This can't be undone.")) {
                     remove.mutate(image.id);

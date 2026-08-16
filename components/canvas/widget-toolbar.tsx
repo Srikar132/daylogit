@@ -36,7 +36,7 @@ function ToolbarItem({ type, label, icon: Icon, disabled }: ToolbarItemProps) {
       type="button"
       title={`Drag to add a ${label}`}
       disabled={disabled}
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03] text-[#9aa0a6] transition-colors hover:border-[#8ab4f8]/40 hover:bg-white/[0.06] hover:text-[#e8eaed] disabled:pointer-events-none disabled:opacity-40 ${
+      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03] text-zinc-400 transition-colors hover:border-white/20 hover:bg-white/[0.08] hover:text-white disabled:pointer-events-none disabled:opacity-40 ${
         isDragging ? "cursor-grabbing opacity-30" : "cursor-grab"
       }`}
     >
@@ -51,7 +51,7 @@ export function ToolbarDragGhost({ type }: { type: string }) {
   if (!widget) return null;
   const Icon = widget.icon;
   return (
-    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#8ab4f8]/50 bg-[#131314] text-[#8ab4f8] shadow-2xl ring-2 ring-[#8ab4f8]/25">
+    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/30 bg-[#18181c] text-white shadow-2xl ring-2 ring-white/20">
       <Icon className="h-[18px] w-[18px]" />
     </div>
   );
@@ -69,7 +69,7 @@ export function WidgetToolbar({ canWrite }: WidgetToolbarProps) {
   if (!canWrite) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-y-4 right-4 z-20 flex items-center">
+    <div className="pointer-events-none fixed inset-y-4 right-[max(1rem,env(safe-area-inset-right))] z-20 flex items-center">
       <div className="pointer-events-auto flex max-h-full flex-col gap-1.5 overflow-y-auto scrollbar-thin rounded-2xl border border-white/[0.08] bg-[#131314]/90 p-2 shadow-2xl backdrop-blur-md">
         {ADDABLE_WIDGET_TYPES.map((widget) => (
           <ToolbarItem key={widget.type} {...widget} disabled={!canWrite} />

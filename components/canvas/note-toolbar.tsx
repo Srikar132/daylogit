@@ -144,7 +144,7 @@ export function NoteToolbar({ editor, bgColor, onBgColorChange, onDelete }: Note
             className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full ring-1 ring-white/10 cursor-pointer"
             style={{ backgroundColor: bg.value ?? "transparent" }}
           >
-            {!bg.value && <span className="text-[8px] text-[#f28b82]">×</span>}
+            {!bg.value && <span className="text-[8px] text-destructive">×</span>}
           </button>
         ))}
       </div>
@@ -157,7 +157,7 @@ export function NoteToolbar({ editor, bgColor, onBgColorChange, onDelete }: Note
             key={s.value}
             type="button"
             onClick={() => editor.chain().focus().setFontSize(s.value).run()}
-            className="rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-[#9aa0a6] hover:bg-white/[0.06] hover:text-[#e8eaed] cursor-pointer"
+            className="rounded-md px-1.5 py-0.5 text-[10.5px] font-medium text-muted-foreground hover:bg-white/[0.06] hover:text-foreground cursor-pointer"
           >
             {s.label}
           </button>
@@ -174,7 +174,7 @@ export function NoteToolbar({ editor, bgColor, onBgColorChange, onDelete }: Note
             title={c.label ?? "Card background"}
             onClick={() => onBgColorChange(c.value)}
             className={`h-4 w-4 shrink-0 rounded-full ring-1 cursor-pointer ${
-              bgColor === c.value ? "ring-2 ring-[#8ab4f8]" : "ring-white/10"
+              bgColor === c.value ? "ring-2 ring-white/60" : "ring-white/10"
             }`}
             style={{ backgroundColor: c.value ?? "#131314" }}
           />
@@ -187,7 +187,7 @@ export function NoteToolbar({ editor, bgColor, onBgColorChange, onDelete }: Note
         type="button"
         onClick={onDelete}
         title="Delete note"
-        className="rounded-md p-1.5 text-[#9aa0a6] hover:bg-[#f28b82]/10 hover:text-[#f28b82] cursor-pointer"
+        className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive cursor-pointer"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
@@ -209,7 +209,7 @@ function ToolbarButton({
       type="button"
       onClick={onClick}
       className={`rounded-md p-1.5 cursor-pointer ${
-        active ? "bg-[#8ab4f8]/20 text-[#8ab4f8]" : "text-[#9aa0a6] hover:bg-white/[0.06] hover:text-[#e8eaed]"
+        active ? "bg-white/15 text-white" : "text-[#9aa0a6] hover:bg-white/[0.06] hover:text-[#e8eaed]"
       }`}
     >
       {children}

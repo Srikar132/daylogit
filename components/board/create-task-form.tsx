@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { CalendarDays, ChevronDown, CornerDownLeft, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { WORK_TYPES, type WorkType } from "@/lib/constants";
+import { Button } from "@/components/ui/button";
 import { WorkTypeIcon } from "@/components/board/work-type-icon";
 import type { TaskStatus } from "@/lib/db";
 
@@ -31,33 +32,35 @@ function WorkTypePicker({ value, onChange }: { value: WorkType; onChange: (v: Wo
 
   return (
     <div ref={ref} className="relative">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 rounded-md p-1 hover:bg-white/[0.06] cursor-pointer"
+        className="h-auto gap-1 p-1"
         title="Work type"
       >
         <WorkTypeIcon type={value} className="h-4 w-4" />
-        <ChevronDown className="h-3 w-3 text-[#80868b]" />
-      </button>
+        <ChevronDown className="h-3 w-3 text-muted-foreground" />
+      </Button>
 
       {open && (
-        <div className="absolute bottom-[calc(100%+6px)] left-0 z-10 w-36 overflow-hidden rounded-xl border border-white/[0.08] bg-[#1e1e1e] py-1 shadow-2xl">
+        <div className="absolute bottom-[calc(100%+6px)] left-0 z-10 w-36 overflow-hidden rounded-xl border border-white/[0.08] bg-popover py-1 shadow-2xl">
           {WORK_TYPES.map((t) => (
-            <button
+            <Button
               key={t.value}
               type="button"
+              variant="ghost"
               onClick={() => {
                 onChange(t.value);
                 setOpen(false);
               }}
-              className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[13px] cursor-pointer ${
-                t.value === value ? "bg-[#1b6ef3]/25 text-[#8ab4f8]" : "text-[#e8eaed] hover:bg-white/[0.06]"
+              className={`h-auto w-full justify-start gap-2 rounded-none px-2.5 py-1.5 text-[13px] font-normal ${
+                t.value === value ? "bg-primary/25 text-primary" : "text-foreground"
               }`}
             >
               <WorkTypeIcon type={t.value} className="h-4 w-4" />
               {t.label}
-            </button>
+            </Button>
           ))}
         </div>
       )}
@@ -71,25 +74,24 @@ function DueDatePicker({ value, onChange }: { value: string; onChange: (v: strin
 
   return (
     <div ref={ref} className="relative">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center gap-1 rounded-md p-1 hover:bg-white/[0.06] cursor-pointer ${
-          value ? "text-[#8ab4f8]" : "text-[#80868b]"
-        }`}
+        className={`h-auto w-auto p-1 ${value ? "text-primary" : "text-muted-foreground"}`}
         title="Due date"
       >
         <CalendarDays className="h-4 w-4" />
-      </button>
+      </Button>
 
       {open && (
-        <div className="absolute bottom-[calc(100%+6px)] left-0 z-10 rounded-xl border border-white/[0.08] bg-[#1e1e1e] p-2 shadow-2xl">
+        <div className="absolute bottom-[calc(100%+6px)] left-0 z-10 rounded-xl border border-white/[0.08] bg-popover p-2 shadow-2xl">
           <input
             type="date"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             autoFocus
-            className="rounded-md bg-white/[0.06] px-2 py-1 text-[12.5px] text-[#e8eaed] focus:outline-none"
+            className="rounded-md bg-white/[0.06] px-2 py-1 text-[12.5px] text-foreground focus:outline-none"
           />
         </div>
       )}
@@ -137,7 +139,10 @@ export function CreateTaskForm({ status, onCreated, onCancel }: CreateTaskFormPr
       onKeyDown={(e) => {
         if (e.key === "Escape") onCancel();
       }}
-      className="flex flex-col gap-2 rounded-xl border-2 border-[#8ab4f8] bg-[#1e1e1e] p-3 shadow-2xl"
+      // `nodrag nowheel` — this form has real text inputs (title, due date)
+      // a user will click-drag to select text in; without it, that drag
+      // gesture gets captured by xyflow's canvas instead.
+      className="nodrag nowheel flex flex-col gap-2 rounded-xl border-2 border-primary bg-popover p-3 shadow-2xl"
     >
       <div className="flex items-start gap-2">
         <textarea
@@ -147,36 +152,34 @@ export function CreateTaskForm({ status, onCreated, onCancel }: CreateTaskFormPr
           rows={2}
           autoFocus
           disabled={createMutation.isPending}
-          className="w-full resize-none bg-transparent text-[14px] text-[#e8eaed] placeholder:text-[#80868b] focus:outline-none"
+          className="w-full resize-none bg-transparent text-[14px] text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={onCancel}
-          className="shrink-0 rounded-md p-1 text-[#80868b] hover:bg-white/[0.06] hover:text-[#e8eaed] cursor-pointer"
+          className="h-auto w-auto shrink-0 p-1 text-muted-foreground hover:text-foreground"
           title="Cancel"
         >
           <X className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </div>
 
-      {error && <p className="text-[11.5px] text-[#f28b82]">{error}</p>}
+      {error && <p className="text-[11.5px] text-destructive">{error}</p>}
 
       <div className="flex items-center gap-1">
         <WorkTypePicker value={workType} onChange={setWorkType} />
         <DueDatePicker value={dueDate} onChange={setDueDate} />
 
-        <button
+        <Button
           type="submit"
+          size="icon-sm"
           disabled={!title.trim() || createMutation.isPending}
           title="Create (Enter)"
-          className={`ml-auto flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${
-            title.trim() && !createMutation.isPending
-              ? "bg-[#8ab4f8] text-[#141414] cursor-pointer"
-              : "bg-white/[0.06] text-[#5f6368]"
-          }`}
+          className="ml-auto rounded-lg"
         >
           <CornerDownLeft className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </div>
     </form>
   );

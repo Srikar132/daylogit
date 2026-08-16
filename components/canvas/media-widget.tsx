@@ -126,15 +126,15 @@ export function MediaWidget({ id, data, canWrite }: MediaWidgetProps) {
     // carries the one thing a skeleton can't (actual upload percentage).
     return (
       <div className="relative h-full w-full overflow-hidden rounded-2xl">
-        <Skeleton className="absolute inset-0 rounded-2xl" />
+        <Skeleton className="absolute inset-0 rounded-2xl bg-white/5" />
         <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-4 text-center">
-          <div className="w-full max-w-[180px] overflow-hidden rounded-full bg-black/40">
+          <div className="w-full max-w-[180px] overflow-hidden rounded-full bg-black/40 border border-white/10">
             <div
-              className="h-1 rounded-full bg-[#8ab4f8] transition-[width] duration-150"
+              className="h-1 rounded-full bg-zinc-200 transition-[width] duration-150"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="text-[11.5px] text-white/80">Uploading… {progress}%</p>
+          <p className="text-[11.5px] text-widget-text-primary">Uploading… {progress}%</p>
         </div>
       </div>
     );
@@ -142,22 +142,22 @@ export function MediaWidget({ id, data, canWrite }: MediaWidgetProps) {
 
   if (media.status === "error") {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        <AlertCircle className="h-5 w-5 text-[#f28b82]" />
-        <p className="text-[12px] text-[#f28b82]">{media.message}</p>
+      <div className="widget-card-shell flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <AlertCircle className="h-5 w-5 text-destructive" />
+        <p className="text-[12px] text-destructive">{media.message}</p>
         {canWrite && (
           <div className="flex gap-2">
             <button
               type="button"
               onClick={retry}
-              className="rounded-full bg-white/[0.06] px-3 py-1 text-[11.5px] text-[#e8eaed] hover:bg-white/10 cursor-pointer"
+              className="rounded-full bg-white/[0.06] px-3 py-1 text-[11.5px] text-widget-text-primary hover:bg-white/10 cursor-pointer"
             >
               Retry
             </button>
             <button
               type="button"
               onClick={() => deleteWidget(id)}
-              className="rounded-full bg-[#f28b82]/10 px-3 py-1 text-[11.5px] text-[#f28b82] hover:bg-[#f28b82]/20 cursor-pointer"
+              className="rounded-full bg-destructive/10 px-3 py-1 text-[11.5px] text-destructive hover:bg-destructive/20 cursor-pointer"
             >
               Remove
             </button>
@@ -194,7 +194,7 @@ export function MediaWidget({ id, data, canWrite }: MediaWidgetProps) {
           <Download className="h-3.5 w-3.5" /> Download
         </ContextMenuItem>
         {canWrite && (
-          <ContextMenuItem destructive onClick={() => deleteWidget(id)}>
+          <ContextMenuItem variant="destructive" onClick={() => deleteWidget(id)}>
             <Trash2 className="h-3.5 w-3.5" /> Delete
           </ContextMenuItem>
         )}

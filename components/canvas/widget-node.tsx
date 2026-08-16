@@ -3,6 +3,7 @@
 import { NodeResizer, type NodeProps } from "@xyflow/react";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
+import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
 import { WidgetChromeProvider } from "@/components/canvas/widget-chrome-context";
 import { BoardWidget } from "@/components/canvas/board-widget";
 import { BookmarkWidget } from "@/components/canvas/bookmark-widget";
@@ -137,30 +138,65 @@ export function WidgetNode({ id, data, selected }: NodeProps) {
   const [entered, setEntered] = useState(false);
   const [floatingToolbar, setFloatingToolbar] = useState<React.ReactNode | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const { setWidgetDraggable, setWidgetSelected } = useCanvasActions();
+
+  // Three states, one derived rule: idle (draggable=false, a drag anywhere on
+  // the card falls through to the pane's own pan) -> selected (single click;
+  // draggable=true, a subsequent drag repositions it) -> interactive (double-
+  // click/tap "enters" the widget; draggable locks back to false so trying
+  // to hit a button/link can't also drag the card). xyflow attaches its own
+  // node-drag handler only when `draggable` is true, so this one flag is the
+  // whole mechanism — no custom drag pass-through needed.
+  useEffect(() => {
+    setWidgetDraggable(id, selected && !entered);
+  }, [id, selected, entered, setWidgetDraggable]);
 
   // Stepping "inside" a widget (double-click/double-tap) makes its body
   // directly interactive; clicking anywhere outside, or Escape, steps back
-  // out. The node is always draggable by grabbing its body otherwise —
-  // there's no header/handle element, every widget type is chromeless now.
+  // out to fully idle (deselecting too — outside clicks on UI outside
+  // xyflow's own DOM, like the toolbar or workspace chrome, won't trigger
+  // xyflow's own pane-click deselect on their own).
   useEffect(() => {
-    if (!entered) return;
+    if (!entered && !selected) return;
+
+    function exitToIdle() {
+      setEntered(false);
+      setWidgetSelected(id, false);
+    }
 
     function handlePointerDown(e: PointerEvent) {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
-        setEntered(false);
+        exitToIdle();
       }
     }
+    // Capture phase, not bubble — a rich-text widget's own editor (Tiptap/
+    // ProseMirror) has its own Escape handling and can stop the event from
+    // ever reaching a bubble-phase document listener. Capture runs before
+    // the event reaches that editor at all, so it can't be swallowed.
+    //
+    // stopPropagation matters here beyond just our own editor: xyflow's own
+    // node wrapper also has an Escape handler (for its own selection model),
+    // and its handleNodeClick has a quirk — if the node is already
+    // deselected by the time it runs, it ignores "unselect" and *selects*
+    // the node instead (its guard only checks unselect when already
+    // selected). Since our exitToIdle deselects first, letting the event
+    // continue to that handler re-selects the node right back. Stopping
+    // propagation here keeps xyflow's own node-level handling from ever
+    // seeing this keypress.
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setEntered(false);
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        exitToIdle();
+      }
     }
 
     document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown, true);
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [entered]);
+  }, [entered, selected, id, setWidgetSelected]);
 
   const isEntered = alwaysInteractive || entered;
   // Media has no background of its own (the image/video fills the card);
@@ -170,26 +206,34 @@ export function WidgetNode({ id, data, selected }: NodeProps) {
   const cardBg =
     widgetData.widgetType === "media"
       ? undefined
-      : ((widgetData.widgetData?.bgColor as string | undefined) ?? "#131314");
+      : (widgetData.widgetData?.bgColor as string | undefined);
 
   return (
     <div ref={rootRef} className="relative h-full w-full" title={title} onDoubleClick={() => setEntered(true)}>
       <div
-        style={{ ...(minHeight ? { minHeight } : undefined), backgroundColor: cardBg }}
-        className={`h-full w-full overflow-hidden rounded-2xl transition-shadow ${
-          entered ? "ring-2 ring-[#8ab4f8]/40" : selected ? "ring-2 ring-[#8ab4f8]/20" : ""
-        } ${
-          isEntered
+        style={{ ...(minHeight ? { minHeight } : undefined), ...(cardBg ? { backgroundColor: cardBg } : undefined) }}
+        className={`widget-card-shell h-full w-full touch-manipulation overflow-hidden transition-all ${entered ? "ring-2 ring-white/40 shadow-[0_0_20px_rgba(255,255,255,0.15)]" : selected ? "ring-2 ring-white/20 shadow-[0_0_15px_rgba(255,255,255,0.1)]" : ""
+          } ${isEntered
             ? // `nodrag` only locks once the user actually double-clicked in —
-              // alwaysInteractive widgets (media/bookmark/project-doc) skip that
-              // gate by design, so they'd otherwise be permanently nodrag'd with
-              // no way left to grab their body and reposition them at all, now
-              // that there's no header handle to fall back on. Their own
-              // genuinely-interactive sub-elements (a link, a button) carry
-              // `nodrag` themselves instead of the whole card claiming it.
-              `nowheel cursor-auto ${entered ? "nodrag" : ""}`
-            : "pointer-events-none cursor-default"
-        }`}
+            // alwaysInteractive widgets (media/bookmark/project-doc) skip that
+            // gate by design, so they'd otherwise be permanently nodrag'd with
+            // no way left to grab their body and reposition them at all, now
+            // that there's no header handle to fall back on. Their own
+            // genuinely-interactive sub-elements (a link, a button) carry
+            // `nodrag` themselves instead of the whole card claiming it.
+            `nowheel ${entered ? "nodrag" : ""}`
+            : "pointer-events-none"
+          } ${
+            // Cursor tracks the REAL entered state, not isEntered — an
+            // alwaysInteractive widget's body stays clickable (pointer-events
+            // above) even when idle/selected, but the cursor still needs to
+            // read grab there like every other widget; only actually being
+            // entered (double-clicked in) drops it to a normal pointer. Any
+            // genuinely-interactive sub-element (a link, a button) carries
+            // its own explicit cursor class that wins over this by CSS
+            // specificity, so this doesn't fight real click targets.
+            entered ? "cursor-auto" : "cursor-grab active:cursor-grabbing"
+          }`}
       >
         <WidgetChromeProvider value={{ entered: isEntered, setFloatingToolbar }}>
           {renderWidgetBody(id, widgetData)}
