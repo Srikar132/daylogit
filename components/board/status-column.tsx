@@ -62,12 +62,12 @@ function DraggableLogItem({
       onClick={() => onOpen?.(log)}
       {...attributes}
       {...listeners}
-      // `nodrag` — without it, a press-and-drag gesture starting on this
-      // card is captured by xyflow (moving/panning the whole canvas widget)
-      // before dnd-kit's own sensor ever sees it, since this card lives
-      // inside a canvas node. `nodrag` tells xyflow to leave pointer events
-      // here alone entirely, so dnd-kit is the only thing driving the drag.
-      className="nodrag flex w-full cursor-pointer flex-col gap-1 rounded-lg border border-white/[0.06] border-l-[3px] bg-white/[0.03] px-2.5 py-2 text-left shadow-sm transition-colors hover:border-white/[0.1] hover:bg-white/[0.06] touch-none select-none"
+      // `nodrag` stops xyflow's own node-drag from claiming this gesture;
+      // `nopan` is the separate xyflow class that stops the PANE's
+      // pan-gesture pointer capture. Without `nopan` too, dragging a card
+      // still pans the whole canvas — the pane grabs the pointerdown before
+      // dnd-kit's sensor ever sees it.
+      className="nodrag nopan flex w-full cursor-pointer flex-col gap-1 rounded-lg border border-white/[0.06] border-l-[3px] bg-white/[0.03] px-2.5 py-2 text-left shadow-sm transition-colors hover:border-white/[0.1] hover:bg-white/[0.06] touch-none select-none"
     >
       <LogCardContent log={log} />
     </div>
