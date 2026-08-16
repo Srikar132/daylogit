@@ -46,8 +46,8 @@ function WorkspaceSwitcher() {
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded-full border border-white/[0.06] bg-[#131314]/85 px-2.5 py-1.5 shadow-lg backdrop-blur-md transition-colors hover:bg-[#131314] cursor-pointer"
       >
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-          <Check className="h-4 w-4 stroke-[3]" />
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white/10 p-0.5 border border-white/20">
+          <img src="/logo.png" alt="Helm Logo" className="h-full w-full object-contain" />
         </div>
         <span className="max-w-[140px] truncate text-[13px] font-medium text-[#e8eaed]">
           {activeOrg?.name ?? "Helm"}

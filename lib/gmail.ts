@@ -29,6 +29,9 @@ export async function fetchTodaysMessages(accessToken: string, maxResults = 20):
 
   const listRes = await fetch(listUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
   if (!listRes.ok) {
+    if (listRes.status === 401) {
+      throw new Error("Gmail authorization token expired or invalid (401).");
+    }
     throw new Error(`Gmail list request failed (${listRes.status}).`);
   }
   const { messages } = (await listRes.json()) as { messages?: { id: string; threadId?: string }[] };

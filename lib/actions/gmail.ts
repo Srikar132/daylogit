@@ -48,7 +48,12 @@ export async function getTodayMessages(): Promise<TodayMailResult> {
     return { messages };
   } catch (err) {
     console.error("Gmail fetch failed", err);
-    return { error: "Couldn't reach Gmail. Try again shortly." };
+    const isExpired = err instanceof Error && err.message.includes("401");
+    return {
+      error: isExpired
+        ? "Gmail session expired. Please reconnect your account under Settings."
+        : "Couldn't reach Gmail. Try again shortly.",
+    };
   }
 }
 
