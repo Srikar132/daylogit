@@ -42,6 +42,10 @@ export function TiptapEditor({ content, onChange, editable, placeholder, classNa
     },
     onFocus: ({ editor }) => onFocusEditor?.(editor),
     onUpdate: ({ editor }) => {
+      // A read-only editor has nothing to persist; anything that still emits an
+      // update here (an extension normalising content, a programmatic command)
+      // must not turn into a save the server will reject.
+      if (!editor.isEditable) return;
       if (onChange) {
         if (saveTimer.current) clearTimeout(saveTimer.current);
         saveTimer.current = setTimeout(() => {
@@ -52,7 +56,11 @@ export function TiptapEditor({ content, onChange, editable, placeholder, classNa
   });
 
   useEffect(() => {
-    editor?.setEditable(editable);
+    // Second arg suppresses setEditable's own "update" event. Without it, just
+    // mounting (or flipping editable) emits an update, which fired onChange and
+    // saved every page on open — a wasted write for an owner, and a rejected
+    // "View-only access." save for an invited member who only opened the doc.
+    editor?.setEditable(editable, false);
   }, [editor, editable]);
 
   if (!editor) return null;

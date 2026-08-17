@@ -140,6 +140,10 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
   });
 
   function handlePageContentChange(pageId: string, json: Record<string, unknown>) {
+    // The server is the authority (updateDocPage rejects with "View-only
+    // access."), but a viewer should never generate the request in the first
+    // place — it only produces console errors for something they didn't do.
+    if (!canWrite) return;
     setPages((prev) => prev.map((p) => (p.id === pageId ? { ...p, content: json } : p)));
     savePageMutation.mutate({ pageId, patch: { content: json } });
   }
@@ -147,6 +151,7 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
   const titleSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   function handlePageTitleChange(pageId: string, title: string) {
+    if (!canWrite) return;
     setPages((prev) => prev.map((p) => (p.id === pageId ? { ...p, title } : p)));
     const timers = titleSaveTimers.current;
     const existing = timers.get(pageId);
