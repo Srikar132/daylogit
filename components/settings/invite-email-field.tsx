@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { suggestInviteEmailsAction } from "@/lib/actions/members";
 import { unwrapAction } from "@/lib/query-utils";
+import { inviteSuggestionsKey } from "@/lib/query-keys";
 
 const SUGGEST_DEBOUNCE_MS = 200;
 /** Below this the suggestion list is more noise than help, and the action
@@ -11,6 +12,9 @@ const SUGGEST_DEBOUNCE_MS = 200;
 const MIN_QUERY_LENGTH = 2;
 
 interface InviteEmailFieldProps {
+  /** Suggestions exclude the current workspace's members and pending invites,
+   *  so the same text yields different results per workspace. */
+  slug: string;
   value: string;
   onChange: (value: string) => void;
   /** Enter in the field submits, same as the Invite button. */
@@ -23,7 +27,7 @@ interface InviteEmailFieldProps {
  * workspace with (see suggestInviteEmailsAction for why it isn't a global user
  * search). Anyone else can still be invited by typing their address in full.
  */
-export function InviteEmailField({ value, onChange, onSubmit, disabled }: InviteEmailFieldProps) {
+export function InviteEmailField({ slug, value, onChange, onSubmit, disabled }: InviteEmailFieldProps) {
   const listboxId = useId();
   const [debounced, setDebounced] = useState(value);
   const [open, setOpen] = useState(false);
@@ -37,7 +41,7 @@ export function InviteEmailField({ value, onChange, onSubmit, disabled }: Invite
 
   const trimmed = debounced.trim();
   const { data } = useQuery({
-    queryKey: ["inviteSuggestions", trimmed.toLowerCase()],
+    queryKey: inviteSuggestionsKey(slug, trimmed.toLowerCase()),
     queryFn: () => unwrapAction(suggestInviteEmailsAction(trimmed)),
     enabled: trimmed.length >= MIN_QUERY_LENGTH,
     // Who shares a workspace with you barely changes between keystrokes.

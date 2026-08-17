@@ -17,6 +17,7 @@ import {
 import { deleteWorkspaceAction, renameWorkspaceAction } from "@/lib/actions/organization";
 import { ACCESS_LEVELS } from "@/lib/permissions";
 import { unwrapAction } from "@/lib/query-utils";
+import { workspaceMembersKey } from "@/lib/query-keys";
 
 type WorkspaceMembersData = Awaited<ReturnType<typeof getWorkspaceMembersData>>;
 type Member = WorkspaceMembersData["members"][number];
@@ -34,6 +35,8 @@ function initialOf(name: string, email: string): string {
 }
 
 interface WorkspaceMembersManagerProps {
+  /** Identifies which workspace's cache to invalidate — see workspaceMembersKey. */
+  slug: string;
   organizationName: string;
   initialMembers: Member[];
   initialInvitations: Invitation[];
@@ -43,6 +46,7 @@ interface WorkspaceMembersManagerProps {
 }
 
 export function WorkspaceMembersManager({
+  slug,
   organizationName,
   initialMembers,
   initialInvitations,
@@ -60,12 +64,10 @@ export function WorkspaceMembersManager({
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // The workspace-settings canvas widget caches member/invitation data under
-  // this key — invalidating it after any of the mutations below means the
-  // widget shows fresh data next time, instead of whatever it had cached
-  // from before this settings page was even opened.
+  // Keyed by workspace (lib/query-keys.ts) so one workspace's cached members
+  // can never be served for another.
   function invalidateMembers() {
-    void queryClient.invalidateQueries({ queryKey: ["workspaceMembers"] });
+    void queryClient.invalidateQueries({ queryKey: workspaceMembersKey(slug) });
   }
 
   const renameMutation = useMutation({
@@ -75,6 +77,10 @@ export function WorkspaceMembersManager({
       return unwrapAction(renameWorkspaceAction({}, fd));
     },
     onSuccess: () => {
+      // Without this the cached members entry — which is where the canvas widget
+      // reads organizationName from, including the name the delete dialog asks
+      // you to retype — kept the pre-rename value.
+      invalidateMembers();
       // The workspace switcher elsewhere on screen reads better-auth's own
       // client-side org cache, which this server action doesn't touch —
       // a soft refresh re-runs server components so this widget (and
@@ -129,7 +135,9 @@ export function WorkspaceMembersManager({
   const deleteWorkspaceMutation = useMutation({
     mutationFn: () => {
       const fd = new FormData();
-      fd.set("confirmName", deleteConfirmText);
+      // Trimmed to match the client-side check, so a stray copy-paste space
+      // can't enable the button and then be rejected by the server.
+      fd.set("confirmName", deleteConfirmText.trim());
       return unwrapAction(deleteWorkspaceAction({}, fd));
     },
     // Full navigation, not router.push — the org this page is scoped to no
@@ -224,6 +232,7 @@ export function WorkspaceMembersManager({
             className="flex flex-wrap items-center gap-2"
           >
             <InviteEmailField
+              slug={slug}
               value={email}
               onChange={setEmail}
               onSubmit={() => {
@@ -371,7 +380,7 @@ export function WorkspaceMembersManager({
                   variant="destructive"
                   size="default"
                   onClick={handleDelete}
-                  disabled={deleteWorkspaceMutation.isPending || deleteConfirmText !== organizationName}
+                  disabled={deleteWorkspaceMutation.isPending || deleteConfirmText.trim() !== organizationName.trim()}
                   className="gap-1.5 px-3 text-[12.5px] font-semibold"
                 >
                   {deleteWorkspaceMutation.isPending ? (

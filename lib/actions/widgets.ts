@@ -65,7 +65,7 @@ function widgetWhere(id: string, organizationId: string) {
 const READ_ONLY_ERROR = "You have view-only access to this workspace.";
 
 /** Reads this user's widgets and, the first time any pinned default (board,
- *  mail-summary, workspace-settings) is missing, inserts it — once inserted
+ *  mail-summary) is missing, inserts it — once inserted
  *  it behaves like any other widget from then on. Replaces the old
  *  "merge defaults into the in-memory array and let the next full-array
  *  save persist them" approach, which no longer exists now that saves are

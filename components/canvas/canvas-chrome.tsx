@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, ChevronDown, LogOut, Plug, Plus } from "lucide-react";
+import { Check, ChevronDown, LogOut, Plug, Plus, Settings } from "lucide-react";
 import { authClient, useActiveOrganization, useListOrganizations, useSession } from "@/lib/auth-client";
 
 function useClickOutside(onOutside: () => void) {
@@ -92,6 +92,7 @@ function WorkspaceSwitcher() {
 function UserMenu() {
   const router = useRouter();
   const { data: session } = useSession();
+  const { data: activeOrg } = useActiveOrganization();
   const [open, setOpen] = useState(false);
   const ref = useClickOutside(() => setOpen(false));
 
@@ -120,6 +121,21 @@ function UserMenu() {
             <p className="truncate text-[12px] text-[#9aa0a6]">{user?.email}</p>
           </div>
           <div className="flex flex-col gap-0.5 p-1.5">
+            {/* Members, invites, rename and delete used to be a pinned canvas
+                card. Disabled rather than hidden when there's no active org yet,
+                so the menu doesn't reshuffle as the session resolves. */}
+            <button
+              type="button"
+              disabled={!activeOrg?.slug}
+              onClick={() => {
+                setOpen(false);
+                router.push(`/workspace/${activeOrg?.slug}/settings`);
+              }}
+              className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-left text-[13px] text-[#e8eaed] hover:bg-white/5 disabled:cursor-default disabled:opacity-40 cursor-pointer"
+            >
+              <Settings className="h-3.5 w-3.5 text-[#9aa0a6]" />
+              Workspace settings
+            </button>
             <button
               type="button"
               onClick={() => {

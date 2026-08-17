@@ -13,7 +13,6 @@ import { GalleryWidget } from "@/components/canvas/gallery-widget";
 import { MailSummaryWidget } from "@/components/canvas/mail-summary-widget";
 import { MediaWidget } from "@/components/canvas/media-widget";
 import { ProjectDocWidget } from "@/components/canvas/project-doc-widget";
-import { WorkspaceSettingsWidget, type WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
 import type { BoardColumn } from "@/lib/worklog";
 import type { DocProjectSummary } from "@/lib/actions/docs";
 import type { AlbumPreview } from "@/lib/actions/albums";
@@ -48,8 +47,8 @@ export type WidgetNodeData = {
   widgetData?: Record<string, unknown>;
   /** Only populated for type "board". */
   columns?: BoardColumn[];
-  /** Only populated for types "project-doc"/"gallery" — needed for the
-   *  MANAGE/OPEN GALLERY link. */
+  /** Populated for "project-doc"/"gallery" (the MANAGE/OPEN GALLERY link) and
+   *  for "board", which needs it to scope its query key to this workspace. */
   slug?: string;
   /** Server-prefetched — batched once for every project-doc card on the
    *  canvas rather than each one fetching its own on mount. */
@@ -60,8 +59,6 @@ export type WidgetNodeData = {
   /** Server-prefetched — only populated for type "mail-summary". */
   initialGmailStatus?: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
-  /** Server-prefetched — only populated for type "workspace-settings". */
-  initialWorkspaceMembers?: WorkspaceMembersData;
 };
 
 // Dispatches on the node's OWN live `data` prop rather than a closure baked
@@ -72,7 +69,7 @@ export type WidgetNodeData = {
 function renderWidgetBody(id: string, data: WidgetNodeData): React.ReactNode {
   switch (data.widgetType) {
     case "board":
-      return <BoardWidget columns={data.columns ?? []} canWrite={data.canWrite} />;
+      return <BoardWidget slug={data.slug ?? ""} columns={data.columns ?? []} canWrite={data.canWrite} />;
     case "bookmark":
       return <BookmarkWidget id={id} canWrite={data.canWrite} widgetData={data.widgetData} />;
     case "gallery": {
@@ -110,8 +107,6 @@ function renderWidgetBody(id: string, data: WidgetNodeData): React.ReactNode {
         />
       );
     }
-    case "workspace-settings":
-      return <WorkspaceSettingsWidget initialData={data.initialWorkspaceMembers} />;
     default:
       return null;
   }

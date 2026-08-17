@@ -23,7 +23,6 @@ import type { DocProjectSummary } from "@/lib/actions/docs";
 import type { AlbumPreview } from "@/lib/actions/albums";
 import type { GmailStatus } from "@/lib/actions/gmail";
 import type { GmailMessageSummary } from "@/lib/gmail";
-import type { WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
 
 const nodeTypes = { widget: WidgetNode };
 
@@ -36,7 +35,6 @@ interface CanvasShellProps {
   initialAlbumPreviews: Record<string, AlbumPreview>;
   initialGmailStatus: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
-  initialWorkspaceMembers?: WorkspaceMembersData;
 }
 
 function CanvasInner({
@@ -48,7 +46,6 @@ function CanvasInner({
   initialAlbumPreviews,
   initialGmailStatus,
   initialGmailMessages,
-  initialWorkspaceMembers,
 }: CanvasShellProps) {
   const ctx: WidgetNodeContext = useMemo(
     () => ({
@@ -59,7 +56,6 @@ function CanvasInner({
       initialAlbumPreviews,
       initialGmailStatus,
       initialGmailMessages,
-      initialWorkspaceMembers,
     }),
     [
       columns,
@@ -69,7 +65,6 @@ function CanvasInner({
       initialAlbumPreviews,
       initialGmailStatus,
       initialGmailMessages,
-      initialWorkspaceMembers,
     ],
   );
 

@@ -1,6 +1,5 @@
 import type { Node } from "@xyflow/react";
 import type { WidgetNodeData } from "@/components/canvas/widget-node";
-import type { WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
 import type { WidgetLayoutItem } from "@/lib/db";
 import type { BoardColumn } from "@/lib/worklog";
 import type { DocProjectSummary } from "@/lib/actions/docs";
@@ -23,7 +22,6 @@ export const KNOWN_WIDGET_TYPES = new Set([
   "markdown",
   "media",
   "project-doc",
-  "workspace-settings",
 ]);
 // Bookmark is a compact, fixed-format row (icon + text) — its height should
 // always hug its own content, never be dragged to an arbitrary size (the
@@ -48,12 +46,14 @@ export const TEXT_EDITING_WIDGET_TYPES = new Set(["markdown"]);
 // Completed" columns are visible without horizontal scroll on a typical
 // desktop viewport. Mail summary sits beside it — fully self-contained, it
 // fetches/manages its own data and takes no props from the canvas.
-// Workspace settings is pinned the same way — never addable/removable (see
-// widget-toolbar.tsx's ADDABLE_WIDGET_TYPES and mergeWithDefaults below).
+// Workspace settings used to be pinned here as a third card; it lives at
+// /workspace/[slug]/settings now, reachable from the avatar menu. Dropping the
+// type from KNOWN_WIDGET_TYPES is what retires the existing rows: mergeWithDefaults
+// filters out anything whose type it no longer recognises, so saved copies stop
+// appearing without needing a data migration.
 export const DEFAULT_LAYOUT: WidgetLayoutItem[] = [
   { id: "board-1", type: "board", x: 40, y: 220, width: 1180, height: 660 },
   { id: "mail-summary-1", type: "mail-summary", x: 1260, y: 220, width: 340, height: 420 },
-  { id: "workspace-settings-1", type: "workspace-settings", x: 1260, y: 660, width: 360, height: 460 },
 ];
 
 // Height omitted for markdown — it sizes to its own content until the user
@@ -92,7 +92,6 @@ export type WidgetNodeContext = {
   initialAlbumPreviews: Record<string, AlbumPreview>;
   initialGmailStatus: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
-  initialWorkspaceMembers?: WorkspaceMembersData;
 };
 
 export function widgetTitle(type: string): string {
@@ -111,8 +110,6 @@ export function widgetTitle(type: string): string {
       return "Media";
     case "project-doc":
       return "Project";
-    case "workspace-settings":
-      return "Workspace";
     default:
       return type;
   }
@@ -138,12 +135,13 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
     widgetType: item.type,
     widgetData: item.data,
     columns: item.type === "board" ? ctx.columns : undefined,
-    slug: item.type === "project-doc" || item.type === "gallery" ? ctx.slug : undefined,
+    // Board needs this too, to scope its query key to this workspace
+    // (lib/query-keys.ts).
+    slug: ctx.slug,
     initialSummary: docProjectId ? ctx.initialProjectSummaries[docProjectId] : undefined,
     initialPreview: albumId ? ctx.initialAlbumPreviews[albumId] : undefined,
     initialGmailStatus: item.type === "mail-summary" ? ctx.initialGmailStatus : undefined,
     initialGmailMessages: item.type === "mail-summary" ? ctx.initialGmailMessages : undefined,
-    initialWorkspaceMembers: item.type === "workspace-settings" ? ctx.initialWorkspaceMembers : undefined,
   };
 
   return {
