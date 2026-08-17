@@ -54,6 +54,11 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
       attributes: { spellcheck: "false" },
     },
     onUpdate: ({ editor }) => {
+      // A view-only member can still trigger editor commands (Tiptap's
+      // `editable` blocks typing, not programmatic commands), and the server
+      // rightly refuses the write. Bailing here means their formatting never
+      // looks like it worked for a second and then vanishes on reload.
+      if (!canWrite) return;
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
         updateWidgetData(id, { content: editor.getJSON(), bgColor });
@@ -64,10 +69,11 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
 
   const handleBgColorChange = useCallback(
     (color: string | undefined) => {
+      if (!canWrite) return;
       setBgColor(color);
       if (editor) updateWidgetData(id, { content: editor.getJSON(), bgColor: color });
     },
-    [editor, id, updateWidgetData],
+    [canWrite, editor, id, updateWidgetData],
   );
 
   useEffect(() => {
@@ -97,7 +103,12 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
   }, [editor, editing, canWrite, enterPoint]);
 
   useEffect(() => {
-    if (!editing || !editor) {
+    // canWrite, not just editing: a view-only member could enter the note (to
+    // select and copy text, which is reasonable) and was handed the whole
+    // formatting toolbar, every button of which applied a mark locally that the
+    // server then refused to save. This is what made "colour doesn't work" look
+    // like a colour bug.
+    if (!editing || !editor || !canWrite) {
       setFloatingToolbar(null);
       return;
     }
@@ -110,7 +121,7 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
       />,
     );
     return () => setFloatingToolbar(null);
-  }, [editing, editor, id, bgColor, deleteWidget, handleBgColorChange, setFloatingToolbar]);
+  }, [editing, editor, canWrite, id, bgColor, deleteWidget, handleBgColorChange, setFloatingToolbar]);
 
   if (!editor) return null;
 

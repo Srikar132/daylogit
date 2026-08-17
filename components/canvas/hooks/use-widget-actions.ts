@@ -5,6 +5,7 @@ import { AUTO_HEIGHT_MIN, NEW_WIDGET_DEFAULTS, buildNode, type WidgetNodeContext
 import { WIDGET_SAVE_RETRY, type SaveStatus } from "@/components/canvas/hooks/use-save-status";
 import { createWidgetAction, deleteWidgetAction, updateWidgetDataAction, updateWidgetSizeAction } from "@/lib/actions/widgets";
 import { unwrapAction } from "@/lib/query-utils";
+import { toPlainJson } from "@/lib/plain-json";
 import type { WidgetLayoutItem } from "@/lib/db";
 
 interface UseWidgetActionsArgs {
@@ -44,8 +45,14 @@ export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActions
 
   const updateWidgetData = useCallback(
     (id: string, widgetData: Record<string, unknown>) => {
-      setNodes((current) => current.map((n) => (n.id === id ? { ...n, data: { ...n.data, widgetData } } : n)));
-      saveWidgetData({ id, widgetData });
+      // Rebuilt as plain JSON before it crosses the server-action boundary:
+      // ProseMirror's mark `attrs` are null-prototype objects, which React Flight
+      // cannot serialize, so a note's text colour was silently dropped in transit
+      // while attribute-less marks like bold came through fine. See
+      // lib/plain-json.ts.
+      const plain = toPlainJson(widgetData);
+      setNodes((current) => current.map((n) => (n.id === id ? { ...n, data: { ...n.data, widgetData: plain } } : n)));
+      saveWidgetData({ id, widgetData: plain });
     },
     [setNodes, saveWidgetData],
   );

@@ -63,9 +63,8 @@ change.
 All fourteen reported bugs are addressed. Remaining work is the feature list below.
 
 **Needs the user, not code:**
+
 - **Bug 3 (text colour) is UNCONFIRMED.** The tiptap version skew was real and is fixed, but the user never retested after a dev-server restart. If it still fails, the next step is logging the actual `updateWidgetDataAction` payload rather than inferring from the DB.
-- `chandranimaheswari13` must hit **Reconnect Gmail** once - its grant has no refresh token and that cannot be repaired server-side.
-- SMTP env vars must be added to Vercel for invitations to mail in production; `BETTER_AUTH_URL` must be the real deployment origin, since accept links are built from it.
 
 ## Features (after the bug list)
 
