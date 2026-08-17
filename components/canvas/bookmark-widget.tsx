@@ -65,7 +65,7 @@ function PendingBookmark({ id, url }: { id: string; url: string }) {
 
   if (error) {
     return (
-      <div className="nodrag widget-card-shell flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
+      <div className="widget-card-shell flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
         <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
         <p className="text-[12px] text-destructive">{error}</p>
         <button
@@ -83,7 +83,7 @@ function PendingBookmark({ id, url }: { id: string; url: string }) {
   // title/url lines) rather than a generic spinner, so the layout doesn't
   // visibly jump once the real preview lands.
   return (
-    <div className="nodrag widget-card-shell flex h-full items-stretch overflow-hidden">
+    <div className="widget-card-shell flex h-full items-stretch overflow-hidden">
       <div className="flex w-[30%] shrink-0 items-center justify-center border-r border-widget-border bg-widget-surface">
         <Skeleton className="h-8 w-8 rounded-md bg-white/10" />
       </div>
@@ -126,7 +126,10 @@ function DraftBookmarkForm({ id, canWrite }: { id: string; canWrite: boolean }) 
   return (
     <form
       onSubmit={handleSubmit}
-      className="nodrag nowheel widget-card-shell flex h-full flex-col gap-2.5 overflow-y-auto scrollbar-thin p-3.5"
+      // Card-level nodrag would make the whole form claim every drag and pin
+      // the card in place; the shell's chrome owns that, and only the fields
+      // claim drags (a drag inside a field means "select text").
+      className="widget-card-shell flex h-full flex-col gap-2.5 overflow-y-auto scrollbar-thin p-3.5"
     >
       <div className="flex items-center gap-2">
         <Bookmark className="h-4 w-4 shrink-0 text-zinc-300" />
@@ -146,7 +149,7 @@ function DraftBookmarkForm({ id, canWrite }: { id: string; canWrite: boolean }) 
         onChange={(e) => setUrl(e.target.value)}
         placeholder="https://…"
         autoFocus
-        className="rounded-xl border-widget-border bg-widget-surface px-2.5 py-1.5 text-[12.5px] text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-white/30"
+        className="nodrag rounded-xl border-widget-border bg-widget-surface px-2.5 py-1.5 text-[12.5px] text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-white/30"
       />
 
       <div className="mt-auto flex items-center justify-end gap-2 pt-1">

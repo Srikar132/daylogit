@@ -50,7 +50,9 @@ function DraftAlbumForm({ id, canWrite }: { id: string; canWrite: boolean }) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="nodrag nowheel relative flex h-full flex-col justify-between overflow-hidden rounded-2xl bg-[#121316]/95 p-4 border border-white/[0.1] backdrop-blur-xl shadow-2xl"
+      // See project-doc/bookmark: the shell's chrome decides nodrag/nowheel, so
+      // the form no longer pins its own card in place.
+      className="relative flex h-full flex-col justify-between overflow-hidden rounded-2xl bg-[#121316]/95 p-4 border border-white/[0.1] backdrop-blur-xl shadow-2xl"
     >
       <div className="absolute -top-12 -left-12 h-32 w-32 rounded-full bg-blue-500/15 blur-2xl pointer-events-none" />
       <div className="absolute -bottom-12 -right-12 h-32 w-32 rounded-full bg-indigo-500/15 blur-2xl pointer-events-none" />
@@ -79,7 +81,7 @@ function DraftAlbumForm({ id, canWrite }: { id: string; canWrite: boolean }) {
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Workspace Snapshots"
           autoFocus
-          className="rounded-xl border-white/10 bg-white/[0.04] px-3 py-2 text-[12.5px] text-[#e8eaed] placeholder:text-[#5f6368] focus-visible:ring-1 focus-visible:ring-white/40 focus-visible:border-white/30"
+          className="nodrag rounded-xl border-white/10 bg-white/[0.04] px-3 py-2 text-[12.5px] text-[#e8eaed] placeholder:text-[#5f6368] focus-visible:ring-1 focus-visible:ring-white/40 focus-visible:border-white/30"
         />
       </div>
 

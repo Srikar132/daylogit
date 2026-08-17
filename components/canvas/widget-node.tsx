@@ -7,6 +7,7 @@ import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
 import { useCanvasMode } from "@/components/canvas/canvas-mode-context";
 import { WidgetChromeProvider } from "@/components/canvas/widget-chrome-context";
 import { resolveWidgetChrome, widgetChromeClassName, widgetPhase } from "@/lib/canvas/widget-interaction";
+import { isWidgetResizable } from "@/components/canvas/widget-registry";
 import { BoardWidget } from "@/components/canvas/board-widget";
 import { BookmarkWidget } from "@/components/canvas/bookmark-widget";
 import { GalleryWidget } from "@/components/canvas/gallery-widget";
@@ -31,7 +32,6 @@ export type WidgetNodeData = {
   /** No visible header anymore — used as a native `title` tooltip on hover. */
   title: string;
   canWrite: boolean;
-  resizable?: boolean;
   /** Content-driven height floor, in px — see widget-registry's AUTO_HEIGHT_MIN.
    *  Applied directly on the card's own container, not an ancestor:
    *  min-height on a percentage-sized ancestor doesn't stretch percentage
@@ -132,7 +132,11 @@ const RESIZE_MIN_HEIGHT = 100;
 
 export function WidgetNode({ id, data, selected }: NodeProps) {
   const widgetData = data as unknown as WidgetNodeData;
-  const { title, resizable = true, minHeight, textEditing = false } = widgetData;
+  const { title, minHeight, textEditing = false } = widgetData;
+  // Derived from live widgetData, not a flag frozen at node construction — a
+  // bookmark/gallery draft is resizable while its form is up and stops being so
+  // once saved (see isWidgetResizable).
+  const resizable = isWidgetResizable(widgetData.widgetType, widgetData.widgetData);
   const [editing, setEditing] = useState(false);
   const [enterPoint, setEnterPoint] = useState<{ x: number; y: number } | null>(null);
   const [floatingToolbar, setFloatingToolbar] = useState<React.ReactNode | null>(null);

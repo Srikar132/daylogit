@@ -140,14 +140,18 @@ function ProjectSpecForm({
 
   const shownError = error ?? localError;
   const fieldClass =
-    "rounded-xl border-widget-border bg-widget-surface px-3 py-1.5 text-[12.5px] text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-1 focus-visible:ring-white/30";
+    "nodrag rounded-xl border-widget-border bg-widget-surface px-3 py-1.5 text-[12.5px] text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-1 focus-visible:ring-white/30";
   const areaClass =
-    "resize-none rounded-xl border-widget-border bg-widget-surface px-3 py-1.5 text-[12px] leading-snug text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-1 focus-visible:ring-white/30";
+    "nodrag resize-none rounded-xl border-widget-border bg-widget-surface px-3 py-1.5 text-[12px] leading-snug text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-1 focus-visible:ring-white/30";
 
   return (
     <form
       onSubmit={handleSubmit}
-      className="nodrag nowheel widget-card-shell relative flex h-full w-full flex-col justify-between overflow-y-auto scrollbar-thin p-4"
+      // No card-level nodrag/nowheel: that made the whole form claim every
+      // drag, so the card could never be moved. The shell's chrome decides
+      // both (lib/canvas/widget-interaction.ts); only the fields below claim
+      // drags, since inside a field a drag means "select text".
+      className="widget-card-shell relative flex h-full w-full flex-col justify-between overflow-y-auto scrollbar-thin p-4"
     >
       <div className="absolute -top-12 -left-12 h-32 w-32 rounded-full bg-white/5 blur-2xl pointer-events-none" />
 

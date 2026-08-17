@@ -94,6 +94,38 @@ export type WidgetNodeContext = {
   initialGmailMessages?: GmailMessageSummary[];
 };
 
+/**
+ * Whether this widget can be resized right now.
+ *
+ * Type alone isn't enough: bookmark and gallery cards hug their own content and
+ * shouldn't be dragged to arbitrary sizes, but both spend their first moments as
+ * a FORM — several inputs that need far more room than the finished card — and a
+ * form you can't resize is a form you can't fill in. So the type rule holds for a
+ * saved widget and lifts while one is still a draft.
+ *
+ * Draft-ness is read from the live widgetData rather than baked in at
+ * node-construction time, so a card stops being resizable the moment it's saved,
+ * without waiting for a reload.
+ */
+export function isWidgetResizable(type: string, widgetData?: Record<string, unknown>): boolean {
+  if (!NON_RESIZABLE_WIDGET_TYPES.has(type)) return true;
+  return isDraftWidget(type, widgetData);
+}
+
+/** True while a widget is still showing its creation form. */
+function isDraftWidget(type: string, widgetData?: Record<string, unknown>): boolean {
+  switch (type) {
+    // A saved bookmark has both a url and a title (see asBookmarkData);
+    // pendingUrl is the mid-fetch state, which is a spinner, not a form.
+    case "bookmark":
+      return typeof widgetData?.pendingUrl !== "string" && typeof widgetData?.url !== "string";
+    case "gallery":
+      return typeof widgetData?.albumId !== "string";
+    default:
+      return false;
+  }
+}
+
 export function widgetTitle(type: string): string {
   switch (type) {
     case "board":
@@ -129,7 +161,6 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
   const data: WidgetNodeData = {
     title: widgetTitle(item.type),
     canWrite: ctx.canWrite,
-    resizable: !NON_RESIZABLE_WIDGET_TYPES.has(item.type),
     minHeight: autoMin,
     textEditing: TEXT_EDITING_WIDGET_TYPES.has(item.type),
     widgetType: item.type,
