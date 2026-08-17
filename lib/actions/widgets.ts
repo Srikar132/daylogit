@@ -34,6 +34,13 @@ function rowToItem(row: { id: string; type: string; x: number; y: number; width:
   };
 }
 
+/** An owned UPDATE that matches no row means the widget isn't there (deleted
+ *  in another tab, or never created because its own create call failed). That
+ *  used to return success, so the client kept editing against a row the server
+ *  never had and the work vanished on the next reload with no error anywhere.
+ *  Reporting it lets the caller retry and, failing that, surface it. */
+const MISSING_WIDGET_ERROR = "That widget no longer exists — reload to get back in sync.";
+
 /** Every mutation below scopes its WHERE by (id, organizationId, userId) —
  *  the same composite the unique index covers — rather than looking the row
  *  up first and checking ownership separately. A stray id from another
@@ -122,10 +129,12 @@ export async function updateWidgetPositionAction(input: z.infer<typeof positionS
   const rateLimit = await checkDragRateLimit(`update-widget-position:${viewer.userId}`);
   if (!rateLimit.success) return { error: rateLimit.error };
 
-  await db
+  const updated = await db
     .update(widgets)
     .set({ x: parsed.data.x, y: parsed.data.y, updatedAt: new Date() })
-    .where(ownedWhere(parsed.data.id, viewer.organizationId, viewer.userId));
+    .where(ownedWhere(parsed.data.id, viewer.organizationId, viewer.userId))
+    .returning({ id: widgets.id });
+  if (updated.length === 0) return { error: MISSING_WIDGET_ERROR };
 
   return {};
 }
@@ -140,10 +149,12 @@ export async function updateWidgetSizeAction(input: z.infer<typeof sizeSchema>):
   const rateLimit = await checkDragRateLimit(`update-widget-size:${viewer.userId}`);
   if (!rateLimit.success) return { error: rateLimit.error };
 
-  await db
+  const updated = await db
     .update(widgets)
     .set({ width: parsed.data.width, height: parsed.data.height, updatedAt: new Date() })
-    .where(ownedWhere(parsed.data.id, viewer.organizationId, viewer.userId));
+    .where(ownedWhere(parsed.data.id, viewer.organizationId, viewer.userId))
+    .returning({ id: widgets.id });
+  if (updated.length === 0) return { error: MISSING_WIDGET_ERROR };
 
   return {};
 }
@@ -156,10 +167,12 @@ export async function updateWidgetDataAction(id: string, data: Record<string, un
   const rateLimit = await checkDragRateLimit(`update-widget-data:${viewer.userId}`);
   if (!rateLimit.success) return { error: rateLimit.error };
 
-  await db
+  const updated = await db
     .update(widgets)
     .set({ data, updatedAt: new Date() })
-    .where(ownedWhere(parsedId.data, viewer.organizationId, viewer.userId));
+    .where(ownedWhere(parsedId.data, viewer.organizationId, viewer.userId))
+    .returning({ id: widgets.id });
+  if (updated.length === 0) return { error: MISSING_WIDGET_ERROR };
 
   return {};
 }

@@ -13,6 +13,7 @@ import { CanvasActionsProvider } from "@/components/canvas/canvas-actions-contex
 import { CANVAS_CLASS_BY_MODE, FLOW_PROPS_BY_MODE, type CanvasMode } from "@/lib/canvas/widget-interaction";
 import { useWidgetLayout } from "@/components/canvas/hooks/use-widget-layout";
 import { useWidgetActions } from "@/components/canvas/hooks/use-widget-actions";
+import { useSaveStatus } from "@/components/canvas/hooks/use-save-status";
 import { useToolbarDrag } from "@/components/canvas/hooks/use-toolbar-drag";
 import { useCanvasPaste } from "@/components/canvas/hooks/use-canvas-paste";
 import type { WidgetNodeContext } from "@/components/canvas/widget-registry";
@@ -72,7 +73,10 @@ function CanvasInner({
     ],
   );
 
-  const { nodes, setNodes, onNodesChange, saveFailed } = useWidgetLayout(initialLayout, ctx);
+  // One save-failure signal for every widget write — content, position and
+  // size alike (see use-save-status.ts).
+  const saveStatus = useSaveStatus();
+  const { nodes, setNodes, onNodesChange } = useWidgetLayout(initialLayout, ctx, saveStatus);
   const {
     updateWidgetData,
     deleteWidget,
@@ -83,7 +87,7 @@ function CanvasInner({
     addMediaFiles,
     getPendingFile,
     clearPendingFile,
-  } = useWidgetActions({ ctx, setNodes });
+  } = useWidgetActions({ ctx, setNodes, saveStatus });
 
   // Grab is the default — opening a canvas starts by looking around it, and a
   // stray first drag pans instead of marquee-selecting or nudging a widget.
@@ -154,7 +158,7 @@ function CanvasInner({
 
       <WidgetToolbar canWrite={canWrite} />
 
-      {saveFailed && (
+      {saveStatus.saveFailed && (
         <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2 rounded-full border border-destructive/30 bg-popover/95 px-4 py-2 text-[12.5px] text-destructive shadow-2xl backdrop-blur-md">
           Couldn&apos;t save your changes — check your connection.
         </div>

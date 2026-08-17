@@ -2,6 +2,7 @@ import type { Node } from "@xyflow/react";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import { AUTO_HEIGHT_MIN, NEW_WIDGET_DEFAULTS, buildNode, type WidgetNodeContext } from "@/components/canvas/widget-registry";
+import { WIDGET_SAVE_RETRY, type SaveStatus } from "@/components/canvas/hooks/use-save-status";
 import { createWidgetAction, deleteWidgetAction, updateWidgetDataAction, updateWidgetSizeAction } from "@/lib/actions/widgets";
 import { unwrapAction } from "@/lib/query-utils";
 import type { WidgetLayoutItem } from "@/lib/db";
@@ -9,6 +10,7 @@ import type { WidgetLayoutItem } from "@/lib/db";
 interface UseWidgetActionsArgs {
   ctx: WidgetNodeContext;
   setNodes: (updater: (current: Node[]) => Node[]) => void;
+  saveStatus: SaveStatus;
 }
 
 /**
@@ -17,11 +19,21 @@ interface UseWidgetActionsArgs {
  * drag and paste hooks to actually create new nodes. Each call here writes
  * exactly the one widget row it touches — no shared array to rewrite.
  */
-export function useWidgetActions({ ctx, setNodes }: UseWidgetActionsArgs) {
+export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActionsArgs) {
+  const { reportSaveFailed, reportSaveSucceeded } = saveStatus;
+
+  // A widget's data IS the user's work (a note's text, a bookmark's url), so
+  // this gets the same retry-then-admit-it treatment as position/size rather
+  // than failing to console only.
   const updateDataMutation = useMutation({
+    ...WIDGET_SAVE_RETRY,
     mutationFn: (input: { id: string; widgetData: Record<string, unknown> }) =>
       unwrapAction(updateWidgetDataAction(input.id, input.widgetData)),
-    onError: (err) => console.error("Failed to save widget data:", err),
+    onError: (err) => {
+      console.error("Failed to save widget data:", err);
+      reportSaveFailed();
+    },
+    onSuccess: reportSaveSucceeded,
   });
 
   const updateWidgetData = useCallback(
@@ -33,8 +45,13 @@ export function useWidgetActions({ ctx, setNodes }: UseWidgetActionsArgs) {
   );
 
   const resizeMutation = useMutation({
+    ...WIDGET_SAVE_RETRY,
     mutationFn: (input: { id: string; width: number; height: number }) => unwrapAction(updateWidgetSizeAction(input)),
-    onError: (err) => console.error("Failed to save widget size:", err),
+    onError: (err) => {
+      console.error("Failed to save widget size:", err);
+      reportSaveFailed();
+    },
+    onSuccess: reportSaveSucceeded,
   });
 
   const resizeWidget = useCallback(
@@ -93,9 +110,12 @@ export function useWidgetActions({ ctx, setNodes }: UseWidgetActionsArgs) {
   );
 
   const createMutation = useMutation({
+    ...WIDGET_SAVE_RETRY,
     mutationFn: (item: WidgetLayoutItem) => unwrapAction(createWidgetAction(item)),
+    onSuccess: reportSaveSucceeded,
     onError: (err, item) => {
       console.error("Failed to create widget:", err);
+      reportSaveFailed();
       // The optimistic node never made it to the server — pull it back out
       // rather than leaving a widget on the canvas that doesn't exist in
       // the DB and will vanish on next reload with no explanation.

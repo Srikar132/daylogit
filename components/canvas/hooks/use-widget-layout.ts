@@ -1,6 +1,7 @@
 import { useNodesState, type Node, type NodeChange } from "@xyflow/react";
 import { useMutation } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
+import { WIDGET_SAVE_RETRY, type SaveStatus } from "@/components/canvas/hooks/use-save-status";
 import { buildNode, type WidgetNodeContext } from "@/components/canvas/widget-registry";
 import { updateWidgetPositionAction, updateWidgetSizeAction } from "@/lib/actions/widgets";
 import { unwrapAction } from "@/lib/query-utils";
@@ -15,36 +16,36 @@ const SAVE_DEBOUNCE_MS = 500;
  * one-JSONB-blob-per-user design where any single change rewrote every
  * widget's data back to the server.
  */
-export function useWidgetLayout(initialLayout: WidgetLayoutItem[], ctx: WidgetNodeContext) {
+export function useWidgetLayout(
+  initialLayout: WidgetLayoutItem[],
+  ctx: WidgetNodeContext,
+  { reportSaveFailed, reportSaveSucceeded }: SaveStatus,
+) {
   const [nodes, setNodes, onNodesChangeInternal] = useNodesState<Node>(
     initialLayout.map((item) => buildNode(item, ctx)),
   );
-
-  const [saveFailed, setSaveFailed] = useState(false);
 
   // One retry (react-query's built-in retry/retryDelay) absorbs a blip; if
   // it still fails after that, surface it instead of pretending it saved —
   // the edit would otherwise vanish silently on next reload.
   const positionMutation = useMutation({
+    ...WIDGET_SAVE_RETRY,
     mutationFn: (input: { id: string; x: number; y: number }) => unwrapAction(updateWidgetPositionAction(input)),
-    retry: 1,
-    retryDelay: 2000,
     onError: (err) => {
       console.error("Failed to save widget position:", err);
-      setSaveFailed(true);
+      reportSaveFailed();
     },
-    onSuccess: () => setSaveFailed(false),
+    onSuccess: reportSaveSucceeded,
   });
 
   const sizeMutation = useMutation({
+    ...WIDGET_SAVE_RETRY,
     mutationFn: (input: { id: string; width: number; height: number }) => unwrapAction(updateWidgetSizeAction(input)),
-    retry: 1,
-    retryDelay: 2000,
     onError: (err) => {
       console.error("Failed to save widget size:", err);
-      setSaveFailed(true);
+      reportSaveFailed();
     },
-    onSuccess: () => setSaveFailed(false),
+    onSuccess: reportSaveSucceeded,
   });
 
   // One debounce timer per widget id — dragging several widgets around
@@ -84,5 +85,5 @@ export function useWidgetLayout(initialLayout: WidgetLayoutItem[], ctx: WidgetNo
     [onNodesChangeInternal, scheduleSave, positionMutation, sizeMutation],
   );
 
-  return { nodes, setNodes, onNodesChange, saveFailed };
+  return { nodes, setNodes, onNodesChange };
 }

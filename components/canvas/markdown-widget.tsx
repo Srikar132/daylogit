@@ -1,22 +1,9 @@
 "use client";
 
 import { useEditor, EditorContent } from "@tiptap/react";
-import { StarterKit } from "@tiptap/starter-kit";
-import { TextStyle } from "@tiptap/extension-text-style";
-import { Color } from "@tiptap/extension-color";
-import { Highlight } from "@tiptap/extension-highlight";
-import { Placeholder } from "@tiptap/extension-placeholder";
-import { Table } from "@tiptap/extension-table";
-import { TableRow } from "@tiptap/extension-table-row";
-import { TableHeader } from "@tiptap/extension-table-header";
-import { TableCell } from "@tiptap/extension-table-cell";
-import { TaskList } from "@tiptap/extension-task-list";
-import { TaskItem } from "@tiptap/extension-task-item";
-import { Markdown } from "@tiptap/markdown";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FontSize } from "@/lib/tiptap/font-size";
-import { MarkdownPasteHandler } from "@/lib/tiptap/markdown-paste";
 import { normalizeMarkdownSource } from "@/lib/tiptap/markdown-signal";
+import { createNoteExtensions } from "@/lib/tiptap/note-extensions";
 import { useWidgetChrome } from "@/components/canvas/widget-chrome-context";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
 import { NoteToolbar } from "@/components/canvas/note-toolbar";
@@ -59,28 +46,7 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
   const consumedPendingMarkdown = useRef(false);
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      TextStyle,
-      Color,
-      Highlight.configure({ multicolor: true }),
-      FontSize,
-      Placeholder.configure({ placeholder: "Write something…" }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      // Markdown parse/serialize. Storage stays ProseMirror JSON — this only
-      // matters when something explicitly passes contentType: "markdown".
-      // breaks: a single newline is a hard break, not a paragraph
-      // continuation, so pasted multi-line text keeps the lines as pasted.
-      Markdown.configure({ markedOptions: { gfm: true, breaks: true } }),
-      // The extension above never engages on paste by itself — it parses only
-      // for explicit contentType: "markdown" callers. This supplies that.
-      MarkdownPasteHandler,
-    ],
+    extensions: createNoteExtensions(),
     content: initialDoc ?? "",
     editable: editing && canWrite,
     immediatelyRender: false,

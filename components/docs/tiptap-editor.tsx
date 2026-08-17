@@ -1,21 +1,8 @@
 "use client";
 
 import { useEditor, EditorContent, type Editor, type JSONContent } from "@tiptap/react";
-import { StarterKit } from "@tiptap/starter-kit";
-import { TextStyle } from "@tiptap/extension-text-style";
-import { Color } from "@tiptap/extension-color";
-import { Highlight } from "@tiptap/extension-highlight";
-import { Placeholder } from "@tiptap/extension-placeholder";
-import { Table } from "@tiptap/extension-table";
-import { TableRow } from "@tiptap/extension-table-row";
-import { TableHeader } from "@tiptap/extension-table-header";
-import { TableCell } from "@tiptap/extension-table-cell";
-import { TaskList } from "@tiptap/extension-task-list";
-import { TaskItem } from "@tiptap/extension-task-item";
-import { Markdown } from "@tiptap/markdown";
 import { useEffect, useRef } from "react";
-import { FontSize } from "@/lib/tiptap/font-size";
-import { MarkdownPasteHandler } from "@/lib/tiptap/markdown-paste";
+import { createNoteExtensions } from "@/lib/tiptap/note-extensions";
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -46,24 +33,7 @@ export function TiptapEditor({ content, onChange, editable, placeholder, classNa
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      TextStyle,
-      Color,
-      Highlight.configure({ multicolor: true }),
-      FontSize,
-      Placeholder.configure({ placeholder: placeholder ?? "Write something…" }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      Markdown.configure({ markedOptions: { gfm: true, breaks: true } }),
-      // The extension above parses only for explicit contentType: "markdown"
-      // callers, never on paste — this supplies the paste path.
-      MarkdownPasteHandler,
-    ],
+    extensions: createNoteExtensions({ placeholder: placeholder ?? "Write something…" }),
     content: content ?? "",
     editable,
     immediatelyRender: false,
