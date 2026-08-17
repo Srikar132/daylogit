@@ -56,7 +56,6 @@ Bug order is the user's own list order — do not reorder.
 9. **Bookmark preview should fetch favicon + metadata** — replace the current preview with a real favicon + OG metadata fetch.
 10. **Gmail: no mail for `chandranimaheswari13`** — real inbox has mail, app shows none. Check token scope/refresh, label/query filter, account→connection mapping (`lib/gmail.ts`, `lib/actions/gmail.ts`).
 11. **Resizable widgets have no sizing sense** — need intent-aware sizing (per-widget min/max/aspect + content-aware defaults) instead of today's arbitrary behaviour.
-12. When it when it to ensure of the scalability in the project documentary page because what if the page content grows up like let's say 2000 plus lines we need to have infinite query I mean infinite fetching right but also the content of the wages and also We can show only one page at a time in the interface for scalability and also we can maintain the order of the pages in the left sidebar with the dragging also dragging feature also And also we can have multiple features here in the project documentary including the view mode for for user itself if you want to read band only the content without stock without editing we can improve right and also we can have such features and highlight features and pinning the pinning any any area you can have right
 
 ## Features (after the bug list)
 
@@ -65,7 +64,7 @@ Bug order is the user's own list order — do not reorder.
    - Mode A (manual): user writes the code, supplies their own input, checks the output themselves.
    - Mode B (AI-assisted): user pastes a coding question; AI generates the driver code and 3–5 test cases, and exposes only the one function the user has to implement. Running executes the user's logic against those AI-generated cases.
    - Open blocker: **no execution sandbox exists in this repo.** Need to pick one and confirm cost — free-tier options vs. paid (Vercel Sandbox, Judge0, Piston, etc.). Not yet researched.
-2. **Canvas pointer modes — grab vs. arrow/select** — modes themselves are DONE (built with bugs 2+12, see Completed). Remaining: the bulk operations on a marquee selection (move/delete/align many widgets at once). Marquee selection already works via `selectionOnDrag`.
+2. When it when it to ensure of the scalability in the project documentary page because what if the page content grows up like let's say 2000 plus lines we need to have infinite query I mean infinite fetching right but also the content of the wages and also We can show only one page at a time in the interface for scalability and also we can maintain the order of the pages in the left sidebar with the dragging also dragging feature also And also we can have multiple features here in the project documentary including the view mode for for user itself if you want to read band only the content without stock without editing we can improve right and also we can have such features and highlight features and pinning the pinning any any area you can have right
 3. **Visual grouping** — draw a box around several widgets. Presentation only, no logical/data grouping.
 
 ## Open Questions
