@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, ArrowUpRight, ExternalLink, FolderGit2, GitBranch, Globe, Lock, Plus, Terminal } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
@@ -9,7 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { createDocProjectAction, deleteDocProjectAction, getDocProject, type DocProjectSummary } from "@/lib/actions/docs";
+import {
+  createDocProjectAction,
+  deleteDocProjectAction,
+  getDocProject,
+  updateDocProjectAction,
+  type DocProjectSummary,
+} from "@/lib/actions/docs";
+import type { DocLink } from "@/lib/db";
 import { unwrapAction } from "@/lib/query-utils";
 
 interface ProjectDocWidgetProps {
@@ -53,38 +60,89 @@ function formatLiveHost(url: string): string {
   }
 }
 
-function DraftProjectForm({ id, canWrite }: { id: string; canWrite: boolean }) {
-  const { updateWidgetData, deleteWidget } = useCanvasActions();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [githubLinks, setGithubLinks] = useState("");
-  const [resourceLinks, setResourceLinks] = useState("");
-  const [liveLink, setLiveLink] = useState("");
-  const [error, setError] = useState<string | null>(null);
+type SpecDraft = {
+  title: string;
+  description: string;
+  liveLink: string;
+  githubLinks: string;
+  resourceLinks: string;
+};
 
-  const createMutation = useMutation({
-    mutationFn: (formData: FormData) => unwrapAction(createDocProjectAction({}, formData)),
-    onSuccess: (res) => updateWidgetData(id, { docProjectId: res.id }),
-    onError: (err) => setError(err.message),
-  });
+/** Inverse of the server's `parseLinks` (one url per line) so an existing spec
+ *  can be loaded back into the same textareas it was written in. */
+function linksToText(links?: DocLink[] | null): string {
+  return (links ?? []).map((link) => link.url).join("\n");
+}
+
+function specDraftFrom(project?: DocProjectSummary): SpecDraft {
+  return {
+    title: project?.title ?? "",
+    description: project?.description ?? "",
+    liveLink: project?.liveLink ?? "",
+    githubLinks: linksToText(project?.githubLinks),
+    resourceLinks: linksToText(project?.resourceLinks),
+  };
+}
+
+interface ProjectSpecFormProps {
+  heading: string;
+  subheading: string;
+  initial: SpecDraft;
+  submitLabel: string;
+  pendingLabel: string;
+  isPending: boolean;
+  error: string | null;
+  onSubmit: (formData: FormData) => void;
+  onCancel: () => void;
+  cancelLabel: string;
+}
+
+/** One form behind both creating a spec and editing it afterwards. Sharing it is
+ *  the point: the fields, their validation and the FormData keys all have to
+ *  match what the server expects, and two copies would drift the moment either
+ *  side gains a field. */
+function ProjectSpecForm({
+  heading,
+  subheading,
+  initial,
+  submitLabel,
+  pendingLabel,
+  isPending,
+  error,
+  onSubmit,
+  onCancel,
+  cancelLabel,
+}: ProjectSpecFormProps) {
+  const [draft, setDraft] = useState(initial);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  function set(key: keyof SpecDraft, value: string) {
+    setDraft((prev) => ({ ...prev, [key]: value }));
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
-    if (!title.trim()) {
-      setError("Give the project a title.");
+    setLocalError(null);
+    if (!draft.title.trim()) {
+      setLocalError("Give the project a title.");
       return;
     }
 
     const formData = new FormData();
-    formData.append("title", title.trim());
-    if (description.trim()) formData.append("description", description.trim());
-    if (liveLink.trim()) formData.append("liveLink", liveLink.trim());
-    formData.append("githubLinks", githubLinks);
-    formData.append("resourceLinks", resourceLinks);
+    formData.append("title", draft.title.trim());
+    if (draft.description.trim()) formData.append("description", draft.description.trim());
+    if (draft.liveLink.trim()) formData.append("liveLink", draft.liveLink.trim());
+    formData.append("githubLinks", draft.githubLinks);
+    formData.append("resourceLinks", draft.resourceLinks);
 
-    createMutation.mutate(formData);
+    onSubmit(formData);
   }
+
+  const shownError = error ?? localError;
+  const fieldClass =
+    "rounded-xl border-widget-border bg-widget-surface px-3 py-1.5 text-[12.5px] text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-1 focus-visible:ring-white/30";
+  const areaClass =
+    "resize-none rounded-xl border-widget-border bg-widget-surface px-3 py-1.5 text-[12px] leading-snug text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-1 focus-visible:ring-white/30";
 
   return (
     <form
@@ -99,76 +157,106 @@ function DraftProjectForm({ id, canWrite }: { id: string; canWrite: boolean }) {
             <Terminal className="h-4 w-4" />
           </div>
           <div>
-            <h3 className="text-[13px] font-semibold text-widget-text-primary">New Project Doc</h3>
-            <p className="text-[11px] text-widget-text-secondary">Register tech spec & repositories</p>
+            <h3 className="text-[13px] font-semibold text-widget-text-primary">{heading}</h3>
+            <p className="text-[11px] text-widget-text-secondary">{subheading}</p>
           </div>
         </div>
 
-        {error && (
+        {shownError && (
           <div className="flex items-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3 py-2 text-[11.5px] text-destructive">
             <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-            <span>{error}</span>
+            <span>{shownError}</span>
           </div>
         )}
 
         <Input
           type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          value={draft.title}
+          onChange={(e) => set("title", e.target.value)}
           placeholder="Project Title (e.g. Daylogit Core API)"
           autoFocus
-          className="rounded-xl border-widget-border bg-widget-surface px-3 py-1.5 text-[12.5px] text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-1 focus-visible:ring-white/30"
+          className={fieldClass}
         />
         <Textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          value={draft.description}
+          onChange={(e) => set("description", e.target.value)}
           placeholder="Brief architectural overview..."
           rows={2}
-          className="resize-none rounded-xl border-widget-border bg-widget-surface px-3 py-1.5 text-[12px] leading-snug text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-1 focus-visible:ring-white/30"
+          className={areaClass}
         />
         <Input
           type="text"
-          value={liveLink}
-          onChange={(e) => setLiveLink(e.target.value)}
+          value={draft.liveLink}
+          onChange={(e) => set("liveLink", e.target.value)}
           placeholder="Live App URL (e.g. https://app.company.com)"
-          className="rounded-xl border-widget-border bg-widget-surface px-3 py-1.5 text-[12.5px] font-mono text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-1 focus-visible:ring-white/30"
+          className={fieldClass + " font-mono"}
         />
         <Textarea
-          value={githubLinks}
-          onChange={(e) => setGithubLinks(e.target.value)}
+          value={draft.githubLinks}
+          onChange={(e) => set("githubLinks", e.target.value)}
           placeholder={"GitHub repository URLs (one per line)"}
           rows={2}
-          className="resize-none rounded-xl border-widget-border bg-widget-surface px-3 py-1.5 text-[12px] font-mono leading-snug text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-1 focus-visible:ring-white/30"
+          className={areaClass + " font-mono"}
         />
         <Textarea
-          value={resourceLinks}
-          onChange={(e) => setResourceLinks(e.target.value)}
+          value={draft.resourceLinks}
+          onChange={(e) => set("resourceLinks", e.target.value)}
           placeholder={"Resource / Spec links (one per line)"}
           rows={2}
-          className="resize-none rounded-xl border-widget-border bg-widget-surface px-3 py-1.5 text-[12px] font-mono leading-snug text-widget-text-primary placeholder:text-widget-text-muted focus-visible:ring-1 focus-visible:ring-white/30"
+          className={areaClass + " font-mono"}
         />
       </div>
 
       <div className="relative z-10 flex items-center justify-end gap-2 pt-3">
-        {canWrite && (
-          <button
-            type="button"
-            onClick={() => deleteWidget(id)}
-            className="rounded-full px-3.5 py-1.5 text-[12px] font-medium text-widget-text-secondary hover:bg-white/[0.06] hover:text-widget-text-primary transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-full px-3.5 py-1.5 text-[12px] font-medium text-widget-text-secondary hover:bg-white/[0.06] hover:text-widget-text-primary transition-colors cursor-pointer"
+        >
+          {cancelLabel}
+        </button>
         <button
           type="submit"
-          disabled={createMutation.isPending}
+          disabled={isPending}
           className="widget-btn-primary inline-flex items-center gap-1.5 px-4 py-1.5 text-[12px] disabled:opacity-60 cursor-pointer"
         >
           <Plus className="h-3.5 w-3.5" />
-          {createMutation.isPending ? "Creating…" : "Save Spec"}
+          {isPending ? pendingLabel : submitLabel}
         </button>
       </div>
     </form>
+  );
+}
+
+function DraftProjectForm({ id, canWrite }: { id: string; canWrite: boolean }) {
+  const { updateWidgetData, deleteWidget } = useCanvasActions();
+  const [error, setError] = useState<string | null>(null);
+
+  const createMutation = useMutation({
+    mutationFn: (formData: FormData) => unwrapAction(createDocProjectAction({}, formData)),
+    onSuccess: (res) => updateWidgetData(id, { docProjectId: res.id }),
+    onError: (err) => setError(err.message),
+  });
+
+  return (
+    <ProjectSpecForm
+      heading="New Project Doc"
+      subheading="Register tech spec & repositories"
+      initial={specDraftFrom()}
+      submitLabel="Save Spec"
+      pendingLabel="Creating…"
+      isPending={createMutation.isPending}
+      error={error}
+      onSubmit={(formData) => {
+        setError(null);
+        createMutation.mutate(formData);
+      }}
+      // Nothing exists on the server yet, so backing out means removing the card.
+      onCancel={() => {
+        if (canWrite) deleteWidget(id);
+      }}
+      cancelLabel="Cancel"
+    />
   );
 }
 
@@ -186,6 +274,9 @@ function ProjectDocCard({
   initialSummary?: DocProjectSummary;
 }) {
   const { deleteWidget } = useCanvasActions();
+  const queryClient = useQueryClient();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const {
     data: project,
     isLoading,
@@ -200,6 +291,20 @@ function ProjectDocCard({
     mutationFn: () => unwrapAction(deleteDocProjectAction(docProjectId)),
     onSuccess: () => deleteWidget(id),
     onError: (err) => console.error("Failed to delete doc project:", err),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (formData: FormData) => {
+      formData.append("id", docProjectId);
+      return unwrapAction(updateDocProjectAction({}, formData));
+    },
+    onSuccess: () => {
+      // The canvas card and the docs page read the same key, so neither keeps
+      // showing the pre-edit spec.
+      void queryClient.invalidateQueries({ queryKey: ["docProject", docProjectId] });
+      setIsEditing(false);
+    },
+    onError: (err) => setEditError(err.message),
   });
 
   function handleDeleteProject() {
@@ -235,12 +340,38 @@ function ProjectDocCard({
     );
   }
 
+  // Editing reuses the creation form rather than a second, drifting copy. Before
+  // this there was no way to change a spec at all once it had been saved.
+  if (isEditing && canWrite) {
+    return (
+      <ProjectSpecForm
+        heading="Edit Project Doc"
+        subheading="Update tech spec & repositories"
+        initial={specDraftFrom(project)}
+        submitLabel="Save changes"
+        pendingLabel="Saving…"
+        isPending={updateMutation.isPending}
+        error={editError}
+        onSubmit={(formData) => {
+          setEditError(null);
+          updateMutation.mutate(formData);
+        }}
+        onCancel={() => {
+          setEditError(null);
+          setIsEditing(false);
+        }}
+        cancelLabel="Discard"
+      />
+    );
+  }
+
   return (
     <ContextMenu>
       <ContextMenuTrigger className="block h-full rounded-2xl">
         <ProjectDocCardBody project={project} slug={slug} docProjectId={docProjectId} />
       </ContextMenuTrigger>
       <ContextMenuContent>
+        {canWrite && <ContextMenuItem onClick={() => setIsEditing(true)}>Edit spec</ContextMenuItem>}
         {canWrite && (
           <ContextMenuItem variant="destructive" onClick={handleDeleteProject}>
             Delete project
