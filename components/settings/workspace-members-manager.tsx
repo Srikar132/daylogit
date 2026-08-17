@@ -6,6 +6,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, AlertTriangle, Loader2, Mail, Pencil, Trash2, UserMinus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyInviteLinkButton } from "@/components/invitations/copy-invite-link-button";
+import { InviteEmailField } from "@/components/settings/invite-email-field";
 import {
   cancelInvitationAction,
   getWorkspaceMembersData,
@@ -20,6 +21,13 @@ import { unwrapAction } from "@/lib/query-utils";
 type WorkspaceMembersData = Awaited<ReturnType<typeof getWorkspaceMembersData>>;
 type Member = WorkspaceMembersData["members"][number];
 type Invitation = WorkspaceMembersData["invitations"][number];
+
+// Deliberately loose: real address validity is the server's call (and the
+// mail server's), this only decides whether the Invite button is worth enabling.
+function isValidEmail(value: string): boolean {
+  const trimmed = value.trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+}
 
 function initialOf(name: string, email: string): string {
   return (name.trim()[0] ?? email[0] ?? "?").toUpperCase();
@@ -132,12 +140,12 @@ export function WorkspaceMembersManager({
     onError: (err) => setError(err.message),
   });
 
-  const isPending =
-    renameMutation.isPending ||
-    inviteMutation.isPending ||
-    removeMemberMutation.isPending ||
-    cancelInviteMutation.isPending ||
-    deleteWorkspaceMutation.isPending;
+  // Each control watches its OWN mutation. A single OR'd flag meant sending an
+  // invite put every button in the widget — Save, Remove, Cancel, Delete — into
+  // a spinner, which reads as "the whole panel is broken" rather than "your
+  // invite is sending".
+
+  const canInvite = isValidEmail(email) && !inviteMutation.isPending;
 
   function handleRename() {
     setError(null);
@@ -188,10 +196,14 @@ export function WorkspaceMembersManager({
               variant="outline"
               size="lg"
               onClick={handleRename}
-              disabled={isPending || !name.trim() || name.trim() === organizationName}
+              disabled={renameMutation.isPending || !name.trim() || name.trim() === organizationName}
               className="shrink-0 gap-1.5 border-white/[0.08] bg-white/[0.04] px-3.5 text-[12.5px] font-medium text-foreground hover:bg-white/10"
             >
-              {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Pencil className="h-3.5 w-3.5" />}
+              {renameMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Pencil className="h-3.5 w-3.5" />
+              )}
               Save
             </Button>
           </div>
@@ -201,16 +213,27 @@ export function WorkspaceMembersManager({
       {canManage && (
         <div className="flex flex-col gap-2">
           <h3 className="text-[11.5px] font-medium uppercase tracking-wide text-muted-foreground">Invite</h3>
-          <div className="flex gap-2">
-            <input
-              type="email"
-              placeholder="teammate@company.com"
+          {/* A real form so Enter submits, and flex-wrap so the Invite button
+              drops to its own line instead of being pushed past the card's
+              overflow clip in a narrow canvas widget. */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (canInvite) handleInvite();
+            }}
+            className="flex flex-wrap items-center gap-2"
+          >
+            <InviteEmailField
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="h-9 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 text-[13px] text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50"
+              onChange={setEmail}
+              onSubmit={() => {
+                if (canInvite) handleInvite();
+              }}
+              disabled={inviteMutation.isPending}
             />
             <select
               disabled
+              title="Only view-only invites are supported for now"
               className="h-9 shrink-0 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2.5 text-[12.5px] text-muted-foreground"
             >
               {ACCESS_LEVELS.map((level) => (
@@ -220,17 +243,23 @@ export function WorkspaceMembersManager({
               ))}
             </select>
             <Button
-              type="button"
+              type="submit"
               variant="default"
               size="lg"
-              onClick={handleInvite}
-              disabled={isPending || !email.trim()}
+              disabled={!canInvite}
               className="shrink-0 gap-1.5 px-3.5 text-[12.5px] font-semibold active:scale-[0.98]"
             >
-              {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+              {inviteMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Mail className="h-3.5 w-3.5" />
+              )}
               Invite
             </Button>
-          </div>
+          </form>
+          {email.trim().length > 0 && !isValidEmail(email) && (
+            <p className="text-[11.5px] text-muted-foreground">Enter a full email address to invite.</p>
+          )}
         </div>
       )}
 
@@ -250,7 +279,7 @@ export function WorkspaceMembersManager({
                   variant="destructive"
                   size="icon-sm"
                   onClick={() => handleCancelInvite(invite.id)}
-                  disabled={isPending}
+                  disabled={cancelInviteMutation.isPending}
                   title="Cancel invite"
                   className="rounded-full"
                 >
@@ -293,7 +322,7 @@ export function WorkspaceMembersManager({
                   variant="destructive"
                   size="icon-sm"
                   onClick={() => handleRemoveMember(member.id)}
-                  disabled={isPending}
+                  disabled={removeMemberMutation.isPending}
                   title="Remove member"
                   className="rounded-full"
                 >
@@ -342,10 +371,14 @@ export function WorkspaceMembersManager({
                   variant="destructive"
                   size="default"
                   onClick={handleDelete}
-                  disabled={isPending || deleteConfirmText !== organizationName}
+                  disabled={deleteWorkspaceMutation.isPending || deleteConfirmText !== organizationName}
                   className="gap-1.5 px-3 text-[12.5px] font-semibold"
                 >
-                  {isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  {deleteWorkspaceMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
                   Delete forever
                 </Button>
                 <Button

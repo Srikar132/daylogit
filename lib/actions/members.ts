@@ -2,10 +2,18 @@
 
 import { headers } from "next/headers";
 import { z } from "zod";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { APIError } from "better-auth/api";
 import { auth } from "@/lib/better-auth";
+import { db } from "@/lib/db";
+import { invitation, member, user } from "@/lib/auth-schema";
 import { requireViewerContext } from "@/lib/workspace";
 import { canDeleteWorkspace, canManageWorkspace, mapAccessLevelToOrgRole, ACCESS_LEVELS } from "@/lib/permissions";
+import {
+  filterInviteSuggestions,
+  MIN_SUGGESTION_QUERY_LENGTH,
+  type InviteSuggestion,
+} from "@/lib/invite-suggestions";
 
 export type MemberActionState = { error?: string };
 
@@ -168,4 +176,64 @@ export async function removeMemberAction(
   }
 
   return {};
+}
+
+const suggestSchema = z.object({ query: z.string().trim().max(120) });
+
+/**
+ * Email suggestions for the invite field.
+ *
+ * Scoped to people the viewer ALREADY shares a workspace with — deliberately
+ * not a search over the whole `user` table. A global prefix search would let
+ * any signed-in account enumerate every email address in the database one
+ * keystroke at a time, which is a data leak dressed up as autocomplete. Anyone
+ * outside that circle can still be invited by typing their address in full;
+ * they just aren't suggested.
+ *
+ * Already-members and already-invited addresses are filtered out, since
+ * inviting them again only produces an error.
+ */
+export async function suggestInviteEmailsAction(
+  query: string,
+): Promise<{ suggestions: InviteSuggestion[]; error?: string }> {
+  const parsed = suggestSchema.safeParse({ query });
+  if (!parsed.success) return { suggestions: [] };
+
+  const viewer = await requireViewerContext();
+  if (!canManageWorkspace(viewer.role)) return { suggestions: [] };
+
+  const needle = parsed.data.query.trim();
+  if (needle.length < MIN_SUGGESTION_QUERY_LENGTH) return { suggestions: [] };
+
+  // Workspaces the viewer belongs to — the boundary of who may be suggested.
+  const viewerOrgs = await db
+    .select({ organizationId: member.organizationId })
+    .from(member)
+    .where(eq(member.userId, viewer.userId));
+  const orgIds = viewerOrgs.map((row) => row.organizationId);
+  if (orgIds.length === 0) return { suggestions: [] };
+
+  const [candidates, currentMembers, pendingInvites] = await Promise.all([
+    db
+      .selectDistinct({ id: user.id, email: user.email, name: user.name })
+      .from(member)
+      .innerJoin(user, eq(member.userId, user.id))
+      .where(and(inArray(member.organizationId, orgIds), ne(user.id, viewer.userId))),
+    db
+      .select({ userId: member.userId })
+      .from(member)
+      .where(eq(member.organizationId, viewer.organizationId)),
+    db
+      .select({ email: invitation.email })
+      .from(invitation)
+      .where(and(eq(invitation.organizationId, viewer.organizationId), eq(invitation.status, "pending"))),
+  ]);
+
+  return {
+    suggestions: filterInviteSuggestions(candidates, {
+      query: needle,
+      memberUserIds: currentMembers.map((m) => m.userId),
+      invitedEmails: pendingInvites.map((i) => i.email),
+    }),
+  };
 }
