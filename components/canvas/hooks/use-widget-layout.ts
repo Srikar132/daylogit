@@ -25,10 +25,16 @@ export function useWidgetLayout(
     initialLayout.map((item) => buildNode(item, ctx)),
   );
 
+// Only `mutate` is destructured, deliberately: useMutation returns a NEW result
+// object on every render, so a callback listing the whole mutation in its deps
+// changed identity every render. That is invisible until such a callback lands in
+// an effect's dependency array, where it produces an endless
+// effect -> setState -> render -> effect loop. `mutate` is referentially stable,
+// and naming it here keeps exhaustive-deps satisfied without reintroducing that.
   // One retry (react-query's built-in retry/retryDelay) absorbs a blip; if
   // it still fails after that, surface it instead of pretending it saved —
   // the edit would otherwise vanish silently on next reload.
-  const positionMutation = useMutation({
+  const { mutate: savePosition } = useMutation({
     ...WIDGET_SAVE_RETRY,
     mutationFn: (input: { id: string; x: number; y: number }) => unwrapAction(updateWidgetPositionAction(input)),
     onError: (err) => {
@@ -38,7 +44,7 @@ export function useWidgetLayout(
     onSuccess: reportSaveSucceeded,
   });
 
-  const sizeMutation = useMutation({
+  const { mutate: saveSize } = useMutation({
     ...WIDGET_SAVE_RETRY,
     mutationFn: (input: { id: string; width: number; height: number }) => unwrapAction(updateWidgetSizeAction(input)),
     onError: (err) => {
@@ -72,17 +78,17 @@ export function useWidgetLayout(
       for (const c of changes) {
         if (c.type === "position" && c.dragging === false && c.position) {
           const { x, y } = c.position;
-          scheduleSave(c.id, () => positionMutation.mutate({ id: c.id, x: Math.round(x), y: Math.round(y) }));
+          scheduleSave(c.id, () => savePosition({ id: c.id, x: Math.round(x), y: Math.round(y) }));
         }
         if (c.type === "dimensions" && c.resizing === false && c.dimensions) {
           const { width, height } = c.dimensions;
           scheduleSave(c.id, () =>
-            sizeMutation.mutate({ id: c.id, width: Math.round(width), height: Math.round(height) }),
+            saveSize({ id: c.id, width: Math.round(width), height: Math.round(height) }),
           );
         }
       }
     },
-    [onNodesChangeInternal, scheduleSave, positionMutation, sizeMutation],
+    [onNodesChangeInternal, scheduleSave, savePosition, saveSize],
   );
 
   return { nodes, setNodes, onNodesChange };

@@ -22,10 +22,16 @@ interface UseWidgetActionsArgs {
 export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActionsArgs) {
   const { reportSaveFailed, reportSaveSucceeded } = saveStatus;
 
+// Only `mutate` is destructured, deliberately: useMutation returns a NEW result
+// object on every render, so a callback listing the whole mutation in its deps
+// changed identity every render. That is invisible until such a callback lands in
+// an effect's dependency array, where it produces an endless
+// effect -> setState -> render -> effect loop. `mutate` is referentially stable,
+// and naming it here keeps exhaustive-deps satisfied without reintroducing that.
   // A widget's data IS the user's work (a note's text, a bookmark's url), so
   // this gets the same retry-then-admit-it treatment as position/size rather
   // than failing to console only.
-  const updateDataMutation = useMutation({
+  const { mutate: saveWidgetData } = useMutation({
     ...WIDGET_SAVE_RETRY,
     mutationFn: (input: { id: string; widgetData: Record<string, unknown> }) =>
       unwrapAction(updateWidgetDataAction(input.id, input.widgetData)),
@@ -39,12 +45,12 @@ export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActions
   const updateWidgetData = useCallback(
     (id: string, widgetData: Record<string, unknown>) => {
       setNodes((current) => current.map((n) => (n.id === id ? { ...n, data: { ...n.data, widgetData } } : n)));
-      updateDataMutation.mutate({ id, widgetData });
+      saveWidgetData({ id, widgetData });
     },
-    [setNodes, updateDataMutation],
+    [setNodes, saveWidgetData],
   );
 
-  const resizeMutation = useMutation({
+  const { mutate: saveWidgetSize } = useMutation({
     ...WIDGET_SAVE_RETRY,
     mutationFn: (input: { id: string; width: number; height: number }) => unwrapAction(updateWidgetSizeAction(input)),
     onError: (err) => {
@@ -57,9 +63,9 @@ export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActions
   const resizeWidget = useCallback(
     (id: string, size: { width: number; height: number }) => {
       setNodes((current) => current.map((n) => (n.id === id ? { ...n, width: size.width, height: size.height } : n)));
-      resizeMutation.mutate({ id, ...size });
+      saveWidgetSize({ id, ...size });
     },
-    [setNodes, resizeMutation],
+    [setNodes, saveWidgetSize],
   );
 
   // Ephemeral interaction state, not persisted — WidgetNode drives this
@@ -95,7 +101,7 @@ export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActions
     pendingFiles.current.delete(id);
   }, []);
 
-  const deleteMutation = useMutation({
+  const { mutate: deleteWidgetRow } = useMutation({
     mutationFn: (id: string) => unwrapAction(deleteWidgetAction(id)),
     onError: (err) => console.error("Failed to delete widget:", err),
   });
@@ -104,12 +110,12 @@ export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActions
     (id: string) => {
       pendingFiles.current.delete(id);
       setNodes((current) => current.filter((n) => n.id !== id));
-      deleteMutation.mutate(id);
+      deleteWidgetRow(id);
     },
-    [setNodes, deleteMutation],
+    [setNodes, deleteWidgetRow],
   );
 
-  const createMutation = useMutation({
+  const { mutate: createWidgetRow } = useMutation({
     ...WIDGET_SAVE_RETRY,
     mutationFn: (item: WidgetLayoutItem) => unwrapAction(createWidgetAction(item)),
     onSuccess: reportSaveSucceeded,
@@ -139,10 +145,10 @@ export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActions
         height: defaults.height,
       };
       setNodes((current) => [...current, buildNode(item, ctx)]);
-      createMutation.mutate(item);
+      createWidgetRow(item);
       return item.id;
     },
-    [ctx, setNodes, createMutation],
+    [ctx, setNodes, createWidgetRow],
   );
 
   // A pasted/dropped file becomes its own widget immediately (status:

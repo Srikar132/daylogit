@@ -147,13 +147,39 @@ export function widgetTitle(type: string): string {
   }
 }
 
+/**
+ * Widget types whose height should follow their content instead of being pinned.
+ *
+ * These all render more than one thing: a project card becomes a five-field form
+ * when edited, a bookmark is a compact row until it's a url form, a note is
+ * however many lines it holds. Pinning a height meant whatever the widget was
+ * measured or dragged to became a hard ceiling — so opening the edit form inside
+ * a 138px-tall card crushed it, and a note could never outgrow the box it was
+ * created in.
+ *
+ * Excluded on purpose: board, mail-summary and media want a fixed viewport with
+ * their own internal scrolling, not a card that grows to the length of a list.
+ */
+const CONTENT_HEIGHT_TYPES = new Set(["markdown", "project-doc", "bookmark", "gallery"]);
+
+/**
+ * A stored height is a FLOOR for these types, not a fixed size.
+ *
+ * Leaving the node's height undefined lets xyflow measure it, so the card grows
+ * with whatever it currently renders; the stored value (what the user last
+ * dragged it to) comes back as a min-height so their sizing is still respected.
+ * Content decides the rest, in layout — no measuring in JS, no writing sizes back
+ * while rendering, and nothing that can feed back on itself.
+ */
+function resolveHeight(item: WidgetLayoutItem): { height?: number; minHeight?: number } {
+  if (CONTENT_HEIGHT_TYPES.has(item.type)) {
+    return { height: undefined, minHeight: item.height ?? AUTO_HEIGHT_MIN[item.type] };
+  }
+  return { height: item.height, minHeight: item.height === undefined ? AUTO_HEIGHT_MIN[item.type] : undefined };
+}
+
 export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node {
-  // Bookmark never keeps a stored height — any value sitting in the DB may
-  // be a leftover from a previous card design (e.g. a taller thumbnail
-  // layout) that no longer matches this type's actual content height, so
-  // it's always ignored in favor of auto-measuring the current content.
-  const height = item.type === "bookmark" ? undefined : item.height;
-  const autoMin = height === undefined ? AUTO_HEIGHT_MIN[item.type] : undefined;
+  const { height, minHeight } = resolveHeight(item);
 
   const docProjectId = item.type === "project-doc" ? (item.data?.docProjectId as string | undefined) : undefined;
   const albumId = item.type === "gallery" ? (item.data?.albumId as string | undefined) : undefined;
@@ -161,7 +187,7 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
   const data: WidgetNodeData = {
     title: widgetTitle(item.type),
     canWrite: ctx.canWrite,
-    minHeight: autoMin,
+    minHeight,
     textEditing: TEXT_EDITING_WIDGET_TYPES.has(item.type),
     widgetType: item.type,
     widgetData: item.data,
