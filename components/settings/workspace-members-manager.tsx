@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, AlertTriangle, Loader2, Mail, Pencil, Trash2, UserMinus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CopyInviteLinkButton } from "@/components/invitations/copy-invite-link-button";
 import {
   cancelInvitationAction,
   getWorkspaceMembersData,
@@ -242,17 +243,20 @@ export function WorkspaceMembersManager({
               className="flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
             >
               <span className="truncate text-[13px] text-muted-foreground">{invite.email}</span>
-              <Button
-                type="button"
-                variant="destructive"
-                size="icon-sm"
-                onClick={() => handleCancelInvite(invite.id)}
-                disabled={isPending}
-                title="Cancel invite"
-                className="rounded-full"
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
+              <div className="flex shrink-0 items-center gap-1">
+                <CopyInviteLinkButton invitationId={invite.id} />
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon-sm"
+                  onClick={() => handleCancelInvite(invite.id)}
+                  disabled={isPending}
+                  title="Cancel invite"
+                  className="rounded-full"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
           ))}
         </div>

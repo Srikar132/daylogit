@@ -4,6 +4,8 @@ import { mcp, organization } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
 import { db } from "@/lib/db";
 import * as authSchema from "@/lib/auth-schema";
+import { sendEmail } from "@/lib/email";
+import { buildInvitationEmail } from "@/lib/emails/invitation";
 
 type SocialProviderConfig = {
   clientId: string;
@@ -45,6 +47,24 @@ export const auth = betterAuth({
   plugins: [
     organization({
       allowUserToCreateOrganization: true,
+      // Called by better-auth right after the invitation row is written. It
+      // deliberately doesn't await-and-throw into the caller: a mail outage
+      // must not roll back a perfectly good invitation, since the members list
+      // exposes the same link via "Copy link" and the invite stays valid
+      // either way. Failures are logged, not surfaced as an invite failure.
+      sendInvitationEmail: async ({ id, email, role, organization: org, inviter }) => {
+        const { subject, html, text } = buildInvitationEmail({
+          workspaceName: org.name,
+          inviterLabel: inviter.user.name || inviter.user.email,
+          role,
+          invitationId: id,
+        });
+        try {
+          await sendEmail({ to: email, subject, html, text });
+        } catch (err) {
+          console.error("Failed to send invitation email:", err);
+        }
+      },
     }),
     // OAuth 2.0 authorization server for MCP clients (Claude Desktop/Code) —
     // replaces the old manual-API-key "paste a token" connect flow with a

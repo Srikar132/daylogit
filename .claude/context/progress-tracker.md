@@ -30,16 +30,24 @@ change.
   2. **The entering gesture never reached the editor.** The card body is `pointer-events-none` until `entered` flips, so the double-click that enters is consumed by the gate — ProseMirror saw no click, got no selection, and the caret landed at the start of the document regardless of where the user aimed. `WidgetNode` now records that gesture's viewport coords as `enterPoint` on the chrome context, and `MarkdownWidget` replays it via `editor.view.posAtCoords()` + `commands.focus(pos)` (falling back to `"end"` when the point misses the text, e.g. card padding). That effect is ordered AFTER the `setEditable` effect deliberately — focusing a non-editable view puts the caret nowhere.
   - Also: double-click no longer sets `entered` on `alwaysInteractive` widgets (media/board/gallery/bookmark/project-doc/mail-summary). They're interactive from the first click, so entering bought nothing — and after fix 1 it would have actively cost them their resize controls, plus `nodrag` on the whole card removes the only remaining way to grab a headerless card and move it.
 
+- **Bug 4 - end-to-end invitation flow** - before this, `inviteMemberAction` created an `invitation` row via `auth.api.createInvitation` and nothing else happened: no `sendInvitationEmail` callback configured, no accept page, no mail provider installed. Built the whole path:
+  - **Mail transport** - `lib/email.ts`, one provider-agnostic `sendEmail()`. SMTP/nodemailer rather than an API provider BECAUSE this app has no custom domain: Resend (and every API provider) only delivers to arbitrary recipients from a DNS-verified domain, and `*.vercel.app` can't be verified since we don't control that zone - it would have worked for emailing ourselves and failed for every real invitee. SMTP with a real mailbox's app password sends to anyone today with no DNS. Swapping to Resend once a domain exists means reimplementing one function. With no SMTP env vars it no-ops and logs the link (same graceful degradation as `lib/rate-limit.ts`), so dev/CI need no secrets. Env: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`.
+  - **Email content** - `lib/emails/invitation.ts`: absolute links off `BETTER_AUTH_URL`, html-escaped (a workspace name can't inject markup), always with a plain-text alternative, access shown in UI wording (`member` -> "View only") not internal role names.
+  - **Delivery hook** - `sendInvitationEmail` on the organization plugin. Deliberately swallows send failures: a mail outage must not roll back a valid invitation, since the same link is available via Copy link.
+  - **Accept page** - `app/accept-invitation/[id]/page.tsx`. Every case is an explicit state via `resolveInvitationState` (`lib/invitations.ts`, 8 unit tests): pending, not-found, wrong-account, expired, accepted, closed. It reads the invitation row directly instead of `auth.api.getInvitation`, which scopes lookups to the signed-in user's email and errors on mismatch - that made "clicking the link while signed into another account", the most likely confusion, indistinguishable from expired/cancelled. Reading the row lets the page name the exact invited address and offer a one-click `SwitchAccountButton` (sign out -> back to the same invitation).
+  - **Auth round trip** - no session redirects to `/sign-in?callbackURL=<invite path>&invited=<email>`; sign-in previously hardcoded `callbackURL="/workspaces"` in BOTH its session redirect and `OAuthButtons`, so an invitee would have been silently dropped there and lost the invite. Google/GitHub create the account on first sign-in, so "has an account" and "doesn't" are one flow. `callbackURL` is attacker-supplied, so it goes through `safeInternalPath` (`lib/safe-path.ts`, 12 unit tests) rejecting absolute, protocol-relative, backslash and control-character targets - otherwise the invite link is an open redirect.
+  - **After accepting** - joins the org, sets it active (so the user doesn't land in whatever org their session pointed at), then redirects to `/workspace/<slug>`. `listOrganizations` is membership-based, so the workspace appears in the list with no extra work.
+  - **Copy link** - `CopyInviteLinkButton` in the pending-invites list: works with no SMTP configured, when mail lands in spam, or to paste into chat. Built from `window.location.origin` so it matches the host actually in use.
+
 ## In Progress
 
-- Nothing — bug 3 (TipTap text colour) is next.
+- **Bug 3 - TipTap text colour** - commands and serialization are proven correct (`tests/note-formatting.test.ts`, 11 cases: `setColor` applies the mark, `onUpdate` fires so the save is scheduled, colour/font-size/highlight survive a `getJSON()` round trip). A DB probe of the saved note showed `{"type":"textStyle"}` with NO `attrs` key - and ProseMirror emits `attrs` whenever the attribute object has any key, so an absent `attrs` means the serializing schema declared no `color` attribute at all. Root cause was in the dependency tree: `@tiptap/core@3.30.0` while `@tiptap/extension-table` and `@tiptap/markdown` both require exactly `3.30.1` (npm reported `invalid`; tiptap pins peers exactly). All `@tiptap/*` are now 3.30.1 with zero invalid peers, `Color` comes from `@tiptap/extension-text-style` (its real home - `@tiptap/extension-color` was a deprecated re-export, removed), and both editors plus the tests now share ONE `createNoteExtensions()` (`lib/tiptap/note-extensions.ts`) so a test can no longer pass against a list the app doesn't use - the list IS the schema. AWAITING user retest after a dev-server restart.
 
 ## Next Up
 
 Bug order is the user's own list order — do not reorder.
 
 3. **TipTap text colour change not working** — colour mark applies but doesn't render, or the command never fires. `Color`/`TextStyle` are registered; check `note-toolbar.tsx` / `global-toolbar.tsx` wiring and whether `prose-note` CSS overrides inline colour.
-4. **Invitations model not fully built** — incomplete feature, not just a bug.
 5. **Toolbar elements not draggable on mobile** — touch drag never starts (pointer/touch sensor or `touch-action`).
 6. **Workspace delete shows stale name** — after a workspace rename, the delete confirmation still shows the old name.
 7. **No after-edit for project doc widget** — no post-save refresh/invalidation path (`project-doc-widget.tsx`).
@@ -60,6 +68,9 @@ Bug order is the user's own list order — do not reorder.
 3. **Visual grouping** — draw a box around several widgets. Presentation only, no logical/data grouping.
 
 ## Open Questions
+
+- `widgets.updated_at` (and likely other timestamp columns) is `timestamp` WITHOUT time zone, so values are stored in server-local time and read back tagged `Z`. Any age/sort/expiry math on them is silently off by the server's offset - this cost real debugging time on bug 3. Worth a migration to `timestamptz`.
+- Invitations only support the `view` access level (`mapAccessLevelToOrgRole` throws for `edit`/`full`, `ACCESS_LEVELS` marks them `enabled: false`). Do edit/full need to land before the flow counts as done?
 
 - Bug 4 (invitations): what's the intended flow — email invite links, or in-app only?
 - Bug 13: is `chandranimaheswari13` a second Google account on one connection, or its own connection row?
