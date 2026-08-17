@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { authClient } from "@/lib/auth-client";
+import { unwrapAction } from "@/lib/query-utils";
 import {
   getGmailStatus,
   getTodayMessages,
@@ -64,9 +65,17 @@ export function MailSummaryWidget({ initialStatus, initialMessages }: MailSummar
 
   const messagesQuery = useQuery({
     queryKey: ["gmailMessages"],
-    queryFn: getTodayMessages,
+    // unwrapAction, per the repo convention: getTodayMessages RESOLVES with
+    // { error } rather than throwing, so without this the query looked
+    // successful, `messages` fell back to [], and a dead token or a failed
+    // request was displayed as "no emails today" — indistinguishable from an
+    // empty inbox, and the real reason sat unread in data.error.
+    queryFn: () => unwrapAction(getTodayMessages()),
     initialData: initialMessages ? { messages: initialMessages } : undefined,
     enabled: connected,
+    // A revoked token fails identically every time; three retries just delays
+    // telling the user to reconnect.
+    retry: 1,
   });
 
   const detailQuery = useQuery({
@@ -179,9 +188,22 @@ export function MailSummaryWidget({ initialStatus, initialMessages }: MailSummar
 
         {/* ERROR STATE */}
         {connected && !loadingMessages && messagesQuery.isError && (
-          <div className="flex w-full items-center justify-center gap-1.5 py-8 text-center text-[12px] text-red-400">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-            Couldn&apos;t load emails.
+          <div className="flex w-full flex-1 flex-col items-center justify-center gap-2.5 px-4 py-6 text-center">
+            <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+            <p className="text-[12px] text-zinc-300">
+              {messagesQuery.error?.message || "Couldn't load emails."}
+            </p>
+            {/* Reconnecting re-runs the same Google link flow as first-time
+                setup, which is what a revoked or expired grant needs. */}
+            <button
+              type="button"
+              onClick={handleConnect}
+              disabled={isConnecting}
+              className="widget-btn-primary flex items-center gap-1.5 px-3.5 py-1.5 text-[12px] disabled:opacity-50 cursor-pointer"
+            >
+              {isConnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+              Reconnect Gmail
+            </button>
           </div>
         )}
 
@@ -190,7 +212,7 @@ export function MailSummaryWidget({ initialStatus, initialMessages }: MailSummar
           <>
             {messages.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center py-8 text-center text-[12px] text-zinc-400">
-                No emails received today.
+                No mail in the last 24 hours.
               </div>
             ) : (
               <div className="nodrag nowheel flex min-h-0 flex-1 flex-col overflow-y-auto scrollbar-thin divide-y divide-white/[0.04]">

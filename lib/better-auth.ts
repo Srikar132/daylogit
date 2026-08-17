@@ -12,6 +12,8 @@ type SocialProviderConfig = {
   clientId: string;
   clientSecret: string;
   prompt?: "select_account" | "consent" | "login" | "none" | "select_account consent";
+  /** Google only returns a refresh token for an offline-access grant. */
+  accessType?: "offline" | "online";
 };
 
 const socialProviders: Record<string, SocialProviderConfig> = {};
@@ -20,8 +22,16 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   socialProviders.google = {
     clientId: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    // Lets the account picker show even with only one active Google session.
-    prompt: "select_account",
+    // Google issues a refresh token ONLY for an offline-access grant, and only
+    // when the user is actually prompted to consent — it silently omits one when
+    // re-authorizing an existing grant. Without both of these, the Gmail access
+    // token simply dies after an hour with nothing to renew it from, and every
+    // later request 401s forever. One account in this database has exactly that:
+    // gmail scope granted, no refresh token, an access token expired for days.
+    accessType: "offline",
+    // "select_account" keeps the account picker (useful with several Google
+    // sessions); "consent" is what makes the refresh token actually arrive.
+    prompt: "select_account consent",
   };
 }
 
