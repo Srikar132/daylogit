@@ -3,7 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
-  ArrowLeft,
   ExternalLink,
   Loader2,
   Mail,
@@ -19,6 +18,7 @@ import {
 } from "@/lib/actions/gmail";
 import { GMAIL_READONLY_SCOPE, type GmailMessageSummary } from "@/lib/gmail";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MailReaderOverlay } from "@/components/canvas/mail-reader-overlay";
 import { GmailIcon } from "@/components/icons/gmail-icon";
 
 interface MailSummaryWidgetProps {
@@ -88,42 +88,41 @@ export function MailSummaryWidget({ initialStatus, initialMessages }: MailSummar
     }
   }
 
-  const messages = messagesQuery.data?.messages ?? [];
+  // Memoised because `?? []` builds a new array every render, which made every
+  // useMemo below it recompute on each pass (and eslint rightly complained).
+  const messages = useMemo(() => messagesQuery.data?.messages ?? [], [messagesQuery.data]);
   const loadingMessages = connected && messagesQuery.isLoading;
 
   const unreadCount = useMemo(() => messages.filter((m) => m.unread).length, [messages]);
 
-  const selectedMailSummary = useMemo(
-    () => messages.find((m) => m.id === selectedMailId),
-    [messages, selectedMailId],
-  );
+  // Shows the list row's own subject/sender/snippet immediately, so the reader
+  // opens with content instead of an empty frame while the body loads.
+  const fallbackReaderMessage = useMemo(() => {
+    const summary = messages.find((m) => m.id === selectedMailId);
+    if (!summary) return null;
+    return {
+      id: summary.id,
+      subject: summary.subject,
+      from: summary.from,
+      snippet: summary.snippet,
+      date: summary.date,
+      bodyText: summary.snippet,
+    };
+  }, [messages, selectedMailId]);
 
   return (
     <div className="flex h-full flex-col p-3.5 select-none">
       {/* Executive macOS Header */}
       <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-white/[0.08]">
         <div className="flex items-center gap-2">
-          {selectedMailId ? (
-            <button
-              type="button"
-              onClick={() => setSelectedMailId(null)}
-              className="flex items-center gap-1 text-[12px] font-medium text-zinc-300 hover:text-white transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="h-3.5 w-3.5 text-zinc-400" />
-              <span>Inbox</span>
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <GmailIcon className="h-4 w-5 shrink-0 rounded-[3px]" />
-              <span className="text-[12.5px] font-medium tracking-tight text-zinc-200">
-                {connected ? "Today's Mail" : "Gmail"}
-              </span>
-              {connected && unreadCount > 0 && (
-                <span className="rounded-full bg-blue-500/20 px-1.5 py-0.2 text-[10px] font-semibold text-blue-300 border border-blue-500/30">
-                  {unreadCount} new
-                </span>
-              )}
-            </div>
+          <GmailIcon className="h-4 w-5 shrink-0 rounded-[3px]" />
+          <span className="text-[12.5px] font-medium tracking-tight text-zinc-200">
+            {connected ? "Today's Mail" : "Gmail"}
+          </span>
+          {connected && unreadCount > 0 && (
+            <span className="rounded-full bg-blue-500/20 px-1.5 py-0.2 text-[10px] font-semibold text-blue-300 border border-blue-500/30">
+              {unreadCount} new
+            </span>
           )}
         </div>
 
@@ -186,46 +185,8 @@ export function MailSummaryWidget({ initialStatus, initialMessages }: MailSummar
           </div>
         )}
 
-        {/* INDIVIDUAL MAIL READER VIEW */}
-        {connected && selectedMailId && (
-          <div className="nodrag nowheel flex flex-1 flex-col overflow-y-auto scrollbar-thin pr-1 space-y-2.5">
-            {detailQuery.isLoading ? (
-              <div className="flex flex-col gap-2.5 py-2">
-                <Skeleton className="h-4 w-3/4 bg-white/10" />
-                <Skeleton className="h-3 w-1/3 bg-white/5" />
-                <Skeleton className="h-28 w-full rounded-xl bg-white/5" />
-              </div>
-            ) : detailQuery.data?.error ? (
-              <div className="flex flex-col items-center justify-center py-6 text-center">
-                <AlertCircle className="h-4 w-4 text-red-400 mb-1.5" />
-                <p className="text-[12px] text-zinc-300">{detailQuery.data.error}</p>
-                <button
-                  type="button"
-                  onClick={() => setSelectedMailId(null)}
-                  className="mt-2 text-[11px] text-zinc-400 hover:text-white underline cursor-pointer"
-                >
-                  Back to inbox
-                </button>
-              </div>
-            ) : detailQuery.data?.message ? (
-              <DetailView message={detailQuery.data.message} />
-            ) : selectedMailSummary ? (
-              <DetailView
-                message={{
-                  id: selectedMailSummary.id,
-                  subject: selectedMailSummary.subject,
-                  from: selectedMailSummary.from,
-                  snippet: selectedMailSummary.snippet,
-                  date: selectedMailSummary.date,
-                  bodyText: selectedMailSummary.snippet,
-                }}
-              />
-            ) : null}
-          </div>
-        )}
-
         {/* INBOX LIST VIEW */}
-        {connected && !loadingMessages && !messagesQuery.isError && !selectedMailId && (
+        {connected && !loadingMessages && !messagesQuery.isError && (
           <>
             {messages.length === 0 ? (
               <div className="flex flex-1 flex-col items-center justify-center py-8 text-center text-[12px] text-zinc-400">
@@ -300,67 +261,17 @@ export function MailSummaryWidget({ initialStatus, initialMessages }: MailSummar
           </>
         )}
       </div>
-    </div>
-  );
-}
 
-function DetailView({
-  message,
-}: {
-  message: {
-    id: string;
-    subject: string;
-    from: string;
-    snippet: string;
-    date?: string;
-    bodyText?: string;
-    bodyHtml?: string;
-  };
-}) {
-  const sender = parseSender(message.from);
-  const formattedTime = formatMailDate(message.date);
-
-  return (
-    <div className="flex flex-col gap-2.5 py-0.5">
-      {/* Subject Line */}
-      <div className="flex items-start justify-between gap-2 border-b border-white/[0.06] pb-2">
-        <h3 className="text-[13.5px] font-semibold text-zinc-100 leading-snug">{message.subject}</h3>
-        {message.id && (
-          <a
-            href={`https://mail.google.com/mail/u/0/#inbox/${message.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Open in Gmail"
-            className="flex items-center gap-1 shrink-0 rounded border border-white/10 bg-white/5 px-2 py-0.5 text-[10.5px] text-zinc-300 hover:bg-white/10 hover:text-white transition-colors"
-          >
-            Gmail
-            <ExternalLink className="h-2.5 w-2.5" />
-          </a>
-        )}
-      </div>
-
-      {/* Sender info */}
-      <div className="flex items-center justify-between gap-2 text-[11.5px]">
-        <div className="min-w-0">
-          <span className="font-semibold text-zinc-200">{sender.name}</span>
-          <span className="ml-1.5 text-zinc-400 font-mono text-[10.5px] truncate">&lt;{sender.email}&gt;</span>
-        </div>
-        {formattedTime && (
-          <span className="text-[10.5px] text-zinc-400 font-mono shrink-0">{formattedTime}</span>
-        )}
-      </div>
-
-      {/* Email Body Container */}
-      <div className="rounded-lg border border-white/[0.06] bg-black/30 p-3 text-[11.5px] leading-relaxed text-zinc-300 whitespace-pre-wrap select-text font-sans min-h-[100px]">
-        {message.bodyHtml ? (
-          <div
-            className="prose-note text-zinc-300 text-[11.5px] leading-relaxed break-words"
-            dangerouslySetInnerHTML={{ __html: message.bodyHtml }}
-          />
-        ) : (
-          message.bodyText || message.snippet
-        )}
-      </div>
+      {selectedMailId && (
+        <MailReaderOverlay
+          message={detailQuery.data?.message ?? fallbackReaderMessage}
+          isLoading={detailQuery.isLoading}
+          error={detailQuery.data?.error}
+          onClose={() => setSelectedMailId(null)}
+          formatSender={parseSender}
+          formatDate={formatMailDate}
+        />
+      )}
     </div>
   );
 }
