@@ -1,5 +1,4 @@
 import {
-  PointerSensor,
   MouseSensor,
   TouchSensor,
   useSensor,
@@ -23,10 +22,20 @@ interface UseToolbarDragArgs {
 export function useToolbarDrag({ addWidget, screenToFlowPosition }: UseToolbarDragArgs) {
   const [draggingType, setDraggingType] = useState<string | null>(null);
 
+  // Mouse and touch are deliberately separate sensors, with NO PointerSensor.
+  // PointerSensor handles both, and because `pointerdown` fires before
+  // `touchstart` it always won on a touch device — so TouchSensor's delay never
+  // applied, and a 4px-distance activation lost every time to the toolbar's own
+  // vertical scrolling, which is why dragging a widget out never worked on a
+  // phone. Split apart, each input gets the activation that suits it:
+  // - mouse: a short distance, so a click stays a click
+  // - touch: press-and-hold, with a movement tolerance that aborts activation.
+  //   That tolerance is what keeps the toolbar scrollable — a swipe moves past
+  //   it before the delay elapses and stays a scroll, while a stationary press
+  //   becomes a drag.
   const dndSensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 100, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   );
 
   function handleDragStart(event: DragStartEvent) {

@@ -3,7 +3,7 @@
 import "@xyflow/react/dist/style.css";
 import { ReactFlow, ReactFlowProvider, Controls, MiniMap, useReactFlow } from "@xyflow/react";
 import { DndContext, DragOverlay } from "@dnd-kit/core";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { WidgetNode } from "@/components/canvas/widget-node";
 import { WidgetToolbar, ToolbarDragGhost } from "@/components/canvas/widget-toolbar";
@@ -99,6 +99,15 @@ function CanvasInner({
     addWidget,
     screenToFlowPosition,
   });
+  // Tap-to-add lands the widget in the middle of whatever the user is looking
+  // at, which is the only sensible target when there is no drop point.
+  const addWidgetAtViewportCenter = useCallback(
+    (type: string) => {
+      addWidget(type, screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }));
+    },
+    [addWidget, screenToFlowPosition],
+  );
+
   const { handleDragOverCanvas, handleDropOnCanvas } = useCanvasPaste({
     canWrite,
     addWidget,
@@ -156,7 +165,7 @@ function CanvasInner({
       <CanvasModeToolbar />
       </CanvasModeProvider>
 
-      <WidgetToolbar canWrite={canWrite} />
+      <WidgetToolbar canWrite={canWrite} onAdd={addWidgetAtViewportCenter} />
 
       {saveStatus.saveFailed && (
         <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2 rounded-full border border-destructive/30 bg-popover/95 px-4 py-2 text-[12.5px] text-destructive shadow-2xl backdrop-blur-md">
