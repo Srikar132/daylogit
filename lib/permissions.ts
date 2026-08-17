@@ -25,6 +25,16 @@ export function canWriteEntries(role: OrgRole | null | undefined): boolean {
   return role === "owner" || role === "admin";
 }
 
+/** Canvas widgets — layout and contents. Same owner/admin rule the board uses,
+ *  kept as its own predicate so widget and entry permissions can diverge once
+ *  real per-role write access lands (see ACCESS_LEVELS: only "view" invites
+ *  exist today, so an invited member reads the workspace and writes nothing).
+ *  Widget rows are scoped to the workspace, not to whoever created them, so
+ *  this IS the write check — there is no userId filter behind it. */
+export function canWriteWidgets(role: OrgRole | null | undefined): boolean {
+  return role === "owner" || role === "admin";
+}
+
 /** better-auth's org plugin only grants "organization:delete" to the owner
  *  role by default (admins can update, not delete) — this mirrors that. */
 export function canDeleteWorkspace(role: OrgRole | null | undefined): boolean {

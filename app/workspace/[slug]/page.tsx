@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/better-auth";
+import { canWriteWidgets } from "@/lib/permissions";
 import { WorkspaceDashboard } from "@/components/workspace-dashboard";
 import { getBoardData } from "@/lib/worklog";
 import { requireViewerContext } from "@/lib/workspace";
@@ -78,7 +79,7 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     <WorkspaceDashboard
       slug={slug}
       columns={columns}
-      canWrite={viewer.role !== "member"}
+      canWrite={canWriteWidgets(viewer.role)}
       initialLayout={initialLayout}
       initialProjectSummaries={initialProjectSummaries}
       initialAlbumPreviews={initialAlbumPreviews}

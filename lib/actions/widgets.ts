@@ -5,6 +5,7 @@ import { and, count, eq } from "drizzle-orm";
 import { db, widgets, type WidgetLayoutItem } from "@/lib/db";
 import { requireViewerContext } from "@/lib/workspace";
 import { mergeWithDefaults } from "@/components/canvas/widget-registry";
+import { canWriteWidgets } from "@/lib/permissions";
 import { checkDragRateLimit, checkRateLimit } from "@/lib/rate-limit";
 
 const MAX_WIDGETS_PER_WORKSPACE = 64;
@@ -22,6 +23,16 @@ const layoutItemSchema = z.object({
   data: z.record(z.string(), z.unknown()).optional(),
 });
 
+/** First occurrence of each app-level id wins. */
+function dedupeById(items: WidgetLayoutItem[]): WidgetLayoutItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
 function rowToItem(row: { id: string; type: string; x: number; y: number; width: number; height: number | null; data: unknown }): WidgetLayoutItem {
   return {
     id: row.id,
@@ -34,21 +45,24 @@ function rowToItem(row: { id: string; type: string; x: number; y: number; width:
   };
 }
 
-/** An owned UPDATE that matches no row means the widget isn't there (deleted
+/** A widget write that matches no row means the widget isn't there (deleted
  *  in another tab, or never created because its own create call failed). That
  *  used to return success, so the client kept editing against a row the server
  *  never had and the work vanished on the next reload with no error anywhere.
  *  Reporting it lets the caller retry and, failing that, surface it. */
 const MISSING_WIDGET_ERROR = "That widget no longer exists — reload to get back in sync.";
 
-/** Every mutation below scopes its WHERE by (id, organizationId, userId) —
- *  the same composite the unique index covers — rather than looking the row
- *  up first and checking ownership separately. A stray id from another
- *  user/org just matches zero rows instead of erroring, which is fine: it
- *  simply means nothing to update. */
-function ownedWhere(id: string, organizationId: string, userId: string) {
-  return and(eq(widgets.id, id), eq(widgets.organizationId, organizationId), eq(widgets.userId, userId));
+/** The canvas belongs to the WORKSPACE, not to whoever created each widget:
+ *  albums and doc projects were already org-scoped, and a member who can see
+ *  the workspace should see the same desk as everyone else in it. Scoping these
+ *  writes by userId instead used to double as the permission check — now that
+ *  it doesn't, every mutation below checks `canWriteWidgets` explicitly. A
+ *  stray id from another org simply matches zero rows. */
+function widgetWhere(id: string, organizationId: string) {
+  return and(eq(widgets.id, id), eq(widgets.organizationId, organizationId));
 }
+
+const READ_ONLY_ERROR = "You have view-only access to this workspace.";
 
 /** Reads this user's widgets and, the first time any pinned default (board,
  *  mail-summary, workspace-settings) is missing, inserts it — once inserted
@@ -62,9 +76,15 @@ export async function getMyWidgetLayout(): Promise<WidgetLayoutItem[]> {
   const rows = await db
     .select()
     .from(widgets)
-    .where(and(eq(widgets.organizationId, viewer.organizationId), eq(widgets.userId, viewer.userId)));
+    .where(eq(widgets.organizationId, viewer.organizationId));
 
-  const existing = rows.map(rowToItem);
+  // The unique index is (id, organizationId, userId), so the pinned defaults
+  // (board-1, mail-summary-1, ...) can exist once per member of the same org —
+  // and did, for anyone who opened a workspace back when this read was
+  // per-user. Reading the workspace as a whole would surface those as duplicate
+  // node ids, so collapse them here. Whichever copy wins, later writes target
+  // every row sharing that (id, org) and converge them.
+  const existing = dedupeById(rows.map(rowToItem));
   const merged = mergeWithDefaults(existing);
   const existingIds = new Set(existing.map((item) => item.id));
   const missing = merged.filter((item) => !existingIds.has(item.id));
@@ -93,13 +113,14 @@ export async function createWidgetAction(item: WidgetLayoutItem): Promise<{ erro
   if (!parsed.success) return { error: "Invalid widget." };
 
   const viewer = await requireViewerContext();
+  if (!canWriteWidgets(viewer.role)) return { error: READ_ONLY_ERROR };
   const rateLimit = await checkRateLimit(`create-widget:${viewer.userId}`);
   if (!rateLimit.success) return { error: rateLimit.error };
 
   const [{ value: existingCount }] = await db
     .select({ value: count() })
     .from(widgets)
-    .where(and(eq(widgets.organizationId, viewer.organizationId), eq(widgets.userId, viewer.userId)));
+    .where(eq(widgets.organizationId, viewer.organizationId));
   if (existingCount >= MAX_WIDGETS_PER_WORKSPACE) {
     return { error: "This workspace has reached its widget limit." };
   }
@@ -126,13 +147,14 @@ export async function updateWidgetPositionAction(input: z.infer<typeof positionS
   if (!parsed.success) return { error: "Invalid position." };
 
   const viewer = await requireViewerContext();
+  if (!canWriteWidgets(viewer.role)) return { error: READ_ONLY_ERROR };
   const rateLimit = await checkDragRateLimit(`update-widget-position:${viewer.userId}`);
   if (!rateLimit.success) return { error: rateLimit.error };
 
   const updated = await db
     .update(widgets)
     .set({ x: parsed.data.x, y: parsed.data.y, updatedAt: new Date() })
-    .where(ownedWhere(parsed.data.id, viewer.organizationId, viewer.userId))
+    .where(widgetWhere(parsed.data.id, viewer.organizationId))
     .returning({ id: widgets.id });
   if (updated.length === 0) return { error: MISSING_WIDGET_ERROR };
 
@@ -146,13 +168,14 @@ export async function updateWidgetSizeAction(input: z.infer<typeof sizeSchema>):
   if (!parsed.success) return { error: "Invalid size." };
 
   const viewer = await requireViewerContext();
+  if (!canWriteWidgets(viewer.role)) return { error: READ_ONLY_ERROR };
   const rateLimit = await checkDragRateLimit(`update-widget-size:${viewer.userId}`);
   if (!rateLimit.success) return { error: rateLimit.error };
 
   const updated = await db
     .update(widgets)
     .set({ width: parsed.data.width, height: parsed.data.height, updatedAt: new Date() })
-    .where(ownedWhere(parsed.data.id, viewer.organizationId, viewer.userId))
+    .where(widgetWhere(parsed.data.id, viewer.organizationId))
     .returning({ id: widgets.id });
   if (updated.length === 0) return { error: MISSING_WIDGET_ERROR };
 
@@ -164,13 +187,14 @@ export async function updateWidgetDataAction(id: string, data: Record<string, un
   if (!parsedId.success) return { error: "Invalid widget id." };
 
   const viewer = await requireViewerContext();
+  if (!canWriteWidgets(viewer.role)) return { error: READ_ONLY_ERROR };
   const rateLimit = await checkDragRateLimit(`update-widget-data:${viewer.userId}`);
   if (!rateLimit.success) return { error: rateLimit.error };
 
   const updated = await db
     .update(widgets)
     .set({ data, updatedAt: new Date() })
-    .where(ownedWhere(parsedId.data, viewer.organizationId, viewer.userId))
+    .where(widgetWhere(parsedId.data, viewer.organizationId))
     .returning({ id: widgets.id });
   if (updated.length === 0) return { error: MISSING_WIDGET_ERROR };
 
@@ -182,10 +206,11 @@ export async function deleteWidgetAction(id: string): Promise<{ error?: string }
   if (!parsedId.success) return { error: "Invalid widget id." };
 
   const viewer = await requireViewerContext();
+  if (!canWriteWidgets(viewer.role)) return { error: READ_ONLY_ERROR };
   const rateLimit = await checkRateLimit(`delete-widget:${viewer.userId}`);
   if (!rateLimit.success) return { error: rateLimit.error };
 
-  await db.delete(widgets).where(ownedWhere(parsedId.data, viewer.organizationId, viewer.userId));
+  await db.delete(widgets).where(widgetWhere(parsedId.data, viewer.organizationId));
 
   return {};
 }
