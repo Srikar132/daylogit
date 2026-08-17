@@ -23,16 +23,6 @@ const layoutItemSchema = z.object({
   data: z.record(z.string(), z.unknown()).optional(),
 });
 
-/** First occurrence of each app-level id wins. */
-function dedupeById(items: WidgetLayoutItem[]): WidgetLayoutItem[] {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    if (seen.has(item.id)) return false;
-    seen.add(item.id);
-    return true;
-  });
-}
-
 function rowToItem(row: { id: string; type: string; x: number; y: number; width: number; height: number | null; data: unknown }): WidgetLayoutItem {
   return {
     id: row.id,
@@ -78,13 +68,9 @@ export async function getMyWidgetLayout(): Promise<WidgetLayoutItem[]> {
     .from(widgets)
     .where(eq(widgets.organizationId, viewer.organizationId));
 
-  // The unique index is (id, organizationId, userId), so the pinned defaults
-  // (board-1, mail-summary-1, ...) can exist once per member of the same org —
-  // and did, for anyone who opened a workspace back when this read was
-  // per-user. Reading the workspace as a whole would surface those as duplicate
-  // node ids, so collapse them here. Whichever copy wins, later writes target
-  // every row sharing that (id, org) and converge them.
-  const existing = dedupeById(rows.map(rowToItem));
+  // No dedupe pass: the unique index is (id, organization_id) as of migration
+  // 0013, so the database guarantees one row per widget per workspace.
+  const existing = rows.map(rowToItem);
   const merged = mergeWithDefaults(existing);
   const existingIds = new Set(existing.map((item) => item.id));
   const missing = merged.filter((item) => !existingIds.has(item.id));

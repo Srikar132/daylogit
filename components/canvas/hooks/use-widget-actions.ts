@@ -5,7 +5,7 @@ import { AUTO_HEIGHT_MIN, NEW_WIDGET_DEFAULTS, buildNode, type WidgetNodeContext
 import { WIDGET_SAVE_RETRY, type SaveStatus } from "@/components/canvas/hooks/use-save-status";
 import { createWidgetAction, deleteWidgetAction, updateWidgetDataAction, updateWidgetSizeAction } from "@/lib/actions/widgets";
 import { unwrapAction } from "@/lib/query-utils";
-import { toPlainJson } from "@/lib/plain-json";
+import { toPlainJson } from "@/lib/utils";
 import type { WidgetLayoutItem } from "@/lib/db";
 
 interface UseWidgetActionsArgs {

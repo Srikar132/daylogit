@@ -2,20 +2,28 @@
 
 import { headers } from "next/headers";
 import { z } from "zod";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, ilike, inArray, ne, notExists, or, sql } from "drizzle-orm";
 import { APIError } from "better-auth/api";
 import { auth } from "@/lib/better-auth";
 import { db } from "@/lib/db";
 import { invitation, member, user } from "@/lib/auth-schema";
+import { alias } from "drizzle-orm/pg-core";
 import { requireViewerContext } from "@/lib/workspace";
 import { canDeleteWorkspace, canManageWorkspace, mapAccessLevelToOrgRole, ACCESS_LEVELS } from "@/lib/permissions";
-import {
-  filterInviteSuggestions,
-  MIN_SUGGESTION_QUERY_LENGTH,
-  type InviteSuggestion,
-} from "@/lib/invite-suggestions";
+import { containsPattern } from "@/lib/utils";
 
 export type MemberActionState = { error?: string };
+export type InviteSuggestion = { email: string; name: string | null };
+
+/** Below this a suggestion list is noise, and a one-character prefix search is
+ *  closer to "list everyone" than to autocomplete. */
+const MIN_SUGGESTION_QUERY_LENGTH = 2;
+const SUGGESTION_LIMIT = 5;
+
+/** `member` appears twice in the suggestion query — once to find people the
+ *  viewer shares any workspace with, once to exclude those already in THIS one —
+ *  so the second reference needs its own alias. */
+const memberAlias = alias(member, "existing_member");
 
 const inviteSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email."),
@@ -205,35 +213,50 @@ export async function suggestInviteEmailsAction(
   const needle = parsed.data.query.trim();
   if (needle.length < MIN_SUGGESTION_QUERY_LENGTH) return { suggestions: [] };
 
-  // Workspaces the viewer belongs to — the boundary of who may be suggested.
-  const viewerOrgs = await db
+  const pattern = containsPattern(needle);
+  // Workspaces the viewer belongs to — the boundary of who may be suggested. A
+  // correlated subquery rather than a separate round trip, so the whole thing
+  // stays one statement.
+  const viewerOrgs = db
     .select({ organizationId: member.organizationId })
     .from(member)
     .where(eq(member.userId, viewer.userId));
-  const orgIds = viewerOrgs.map((row) => row.organizationId);
-  if (orgIds.length === 0) return { suggestions: [] };
 
-  const [candidates, currentMembers, pendingInvites] = await Promise.all([
-    db
-      .selectDistinct({ id: user.id, email: user.email, name: user.name })
-      .from(member)
-      .innerJoin(user, eq(member.userId, user.id))
-      .where(and(inArray(member.organizationId, orgIds), ne(user.id, viewer.userId))),
-    db
-      .select({ userId: member.userId })
-      .from(member)
-      .where(eq(member.organizationId, viewer.organizationId)),
-    db
-      .select({ email: invitation.email })
-      .from(invitation)
-      .where(and(eq(invitation.organizationId, viewer.organizationId), eq(invitation.status, "pending"))),
-  ]);
+  const alreadyMember = db
+    .select({ one: sql`1` })
+    .from(memberAlias)
+    .where(and(eq(memberAlias.organizationId, viewer.organizationId), eq(memberAlias.userId, user.id)));
 
-  return {
-    suggestions: filterInviteSuggestions(candidates, {
-      query: needle,
-      memberUserIds: currentMembers.map((m) => m.userId),
-      invitedEmails: pendingInvites.map((i) => i.email),
-    }),
-  };
+  const alreadyInvited = db
+    .select({ one: sql`1` })
+    .from(invitation)
+    .where(
+      and(
+        eq(invitation.organizationId, viewer.organizationId),
+        eq(invitation.status, "pending"),
+        sql`lower(${invitation.email}) = lower(${user.email})`,
+      ),
+    );
+
+  // Matching, exclusion and the row cap all happen in SQL. Doing any of it in
+  // JavaScript meant loading every user in every workspace the viewer belongs to
+  // on each keystroke, which is fine for a handful of people and pointless work
+  // for a real team.
+  const rows = await db
+    .selectDistinct({ email: user.email, name: user.name })
+    .from(member)
+    .innerJoin(user, eq(member.userId, user.id))
+    .where(
+      and(
+        inArray(member.organizationId, viewerOrgs),
+        ne(user.id, viewer.userId),
+        or(ilike(user.email, pattern), ilike(user.name, pattern)),
+        notExists(alreadyMember),
+        notExists(alreadyInvited),
+      ),
+    )
+    .limit(SUGGESTION_LIMIT);
+
+  return { suggestions: rows };
 }
+

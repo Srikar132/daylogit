@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import { Editor } from "@tiptap/core";
 import { createNoteExtensions } from "@/lib/tiptap/note-extensions";
-import { toPlainJson } from "@/lib/plain-json";
+import { containsPattern, escapeLikePattern, toPlainJson } from "@/lib/utils";
 
 /**
  * The colour bug: ProseMirror builds a mark's `attrs` with `Object.create(null)`,
@@ -88,5 +88,28 @@ describe("toPlainJson", () => {
 
   it("preserves nulls, which carry meaning in mark attrs", () => {
     expect(toPlainJson({ fontSize: null })).toEqual({ fontSize: null });
+  });
+});
+
+describe("escapeLikePattern", () => {
+  it("neutralises SQL wildcards a user typed", () => {
+    // Without this, a lone "%" in the invite box matches every user in the
+    // database instead of none.
+    expect(escapeLikePattern("100%")).toBe("100\\%");
+    expect(escapeLikePattern("a_b")).toBe("a\\_b");
+  });
+
+  it("escapes backslashes first, so the added escapes survive", () => {
+    // One backslash in, two out — otherwise the escapes added above would
+    // themselves be escaped by this pass.
+    expect(escapeLikePattern("a\\b")).toBe("a\\\\b");
+  });
+
+  it("leaves ordinary text alone", () => {
+    expect(escapeLikePattern("alice@example.com")).toBe("alice@example.com");
+  });
+
+  it("wraps a contains pattern and trims the input", () => {
+    expect(containsPattern("  ali  ")).toBe("%ali%");
   });
 });

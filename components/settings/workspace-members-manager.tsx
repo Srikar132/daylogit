@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, AlertTriangle, Loader2, Mail, Pencil, Trash2, UserMinus, X } from "lucide-react";
+import { AlertCircle, Loader2, Mail, Pencil, UserMinus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CopyInviteLinkButton } from "@/components/invitations/copy-invite-link-button";
 import { InviteEmailField } from "@/components/settings/invite-email-field";
+import { WorkspaceDangerZone } from "@/components/settings/workspace-danger-zone";
 import {
   cancelInvitationAction,
   getWorkspaceMembersData,
@@ -14,7 +15,7 @@ import {
   listPendingInvitationsAction,
   removeMemberAction,
 } from "@/lib/actions/members";
-import { deleteWorkspaceAction, renameWorkspaceAction } from "@/lib/actions/organization";
+import { renameWorkspaceAction } from "@/lib/actions/organization";
 import { ACCESS_LEVELS } from "@/lib/permissions";
 import { unwrapAction } from "@/lib/query-utils";
 import { workspaceMembersKey } from "@/lib/query-keys";
@@ -60,8 +61,6 @@ export function WorkspaceMembersManager({
   const [members, setMembers] = useState(initialMembers);
   const [invitations, setInvitations] = useState(initialInvitations);
   const [email, setEmail] = useState("");
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   // Keyed by workspace (lib/query-keys.ts) so one workspace's cached members
@@ -132,22 +131,6 @@ export function WorkspaceMembersManager({
     onError: (err) => setError(err.message),
   });
 
-  const deleteWorkspaceMutation = useMutation({
-    mutationFn: () => {
-      const fd = new FormData();
-      // Trimmed to match the client-side check, so a stray copy-paste space
-      // can't enable the button and then be rejected by the server.
-      fd.set("confirmName", deleteConfirmText.trim());
-      return unwrapAction(deleteWorkspaceAction({}, fd));
-    },
-    // Full navigation, not router.push — the org this page is scoped to no
-    // longer exists, so nothing here should try to re-render.
-    onSuccess: () => {
-      window.location.href = "/workspaces";
-    },
-    onError: (err) => setError(err.message),
-  });
-
   // Each control watches its OWN mutation. A single OR'd flag meant sending an
   // invite put every button in the widget — Save, Remove, Cancel, Delete — into
   // a spinner, which reads as "the whole panel is broken" rather than "your
@@ -173,11 +156,6 @@ export function WorkspaceMembersManager({
   function handleCancelInvite(invitationId: string) {
     setError(null);
     cancelInviteMutation.mutate(invitationId);
-  }
-
-  function handleDelete() {
-    setError(null);
-    deleteWorkspaceMutation.mutate();
   }
 
   return (
@@ -343,70 +321,7 @@ export function WorkspaceMembersManager({
         })}
       </div>
 
-      {canDelete && (
-        <div className="flex flex-col gap-2 rounded-xl border border-destructive/25 bg-destructive/[0.04] p-3">
-          <div className="flex items-center gap-1.5 text-[12.5px] font-medium text-destructive">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-            Danger zone
-          </div>
-
-          {!deleteConfirmOpen ? (
-            <Button
-              type="button"
-              variant="destructive"
-              size="default"
-              onClick={() => setDeleteConfirmOpen(true)}
-              className="w-fit gap-1.5 px-3 text-[12.5px] font-medium"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete workspace
-            </Button>
-          ) : (
-            <div className="flex flex-col gap-2">
-              <p className="text-[12px] text-muted-foreground">
-                This deletes <span className="font-medium text-foreground">{organizationName}</span> and everything in
-                it, for everyone. Type the workspace name to confirm.
-              </p>
-              <input
-                type="text"
-                value={deleteConfirmText}
-                onChange={(e) => setDeleteConfirmText(e.target.value)}
-                placeholder={organizationName}
-                className="h-9 rounded-lg border border-destructive/30 bg-white/[0.04] px-3 text-[13px] text-foreground outline-none focus:border-destructive/60"
-              />
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="default"
-                  onClick={handleDelete}
-                  disabled={deleteWorkspaceMutation.isPending || deleteConfirmText.trim() !== organizationName.trim()}
-                  className="gap-1.5 px-3 text-[12.5px] font-semibold"
-                >
-                  {deleteWorkspaceMutation.isPending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" />
-                  )}
-                  Delete forever
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="default"
-                  onClick={() => {
-                    setDeleteConfirmOpen(false);
-                    setDeleteConfirmText("");
-                  }}
-                  className="px-3 text-[12.5px] font-medium text-muted-foreground"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      {canDelete && <WorkspaceDangerZone organizationName={organizationName} onError={setError} />}
     </div>
   );
 }

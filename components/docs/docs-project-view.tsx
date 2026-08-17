@@ -28,7 +28,7 @@ import {
   type DocProjectSummary,
 } from "@/lib/actions/docs";
 import { unwrapAction } from "@/lib/query-utils";
-import { toPlainJson } from "@/lib/plain-json";
+import { toPlainJson } from "@/lib/utils";
 
 interface DocsProjectViewProps {
   /** Omitted for the public share view — there's no workspace to go back

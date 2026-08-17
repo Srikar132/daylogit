@@ -5,7 +5,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/better-auth";
 import { OAuthButtons } from "@/components/auth/oauth-buttons";
-import { safeInternalPath } from "@/lib/safe-path";
+import { safeInternalPath } from "@/lib/utils";
 
 /** `callbackURL` is where to land after sign-in — an invitation link sets it so
  *  the invitee returns to the invitation instead of being dropped on the
