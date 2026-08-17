@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { mcp, organization } from "better-auth/plugins";
@@ -47,11 +48,13 @@ export const auth = betterAuth({
   plugins: [
     organization({
       allowUserToCreateOrganization: true,
-      // Called by better-auth right after the invitation row is written. It
-      // deliberately doesn't await-and-throw into the caller: a mail outage
-      // must not roll back a perfectly good invitation, since the members list
-      // exposes the same link via "Copy link" and the invite stays valid
-      // either way. Failures are logged, not surfaced as an invite failure.
+      // Called by better-auth right after the invitation row is written, and
+      // awaited by createInvitation — so sending inline makes the person
+      // clicking "Invite" wait on the mail server (measured ~20s against Gmail
+      // SMTP). `after()` runs it once the response is already on its way,
+      // which also means a mail outage can't fail an otherwise-valid
+      // invitation: the row exists, and the members list offers the same link
+      // via "Copy link". Failures are logged, never surfaced as invite errors.
       sendInvitationEmail: async ({ id, email, role, organization: org, inviter }) => {
         const { subject, html, text } = buildInvitationEmail({
           workspaceName: org.name,
@@ -59,10 +62,16 @@ export const auth = betterAuth({
           role,
           invitationId: id,
         });
+        const deliver = () =>
+          sendEmail({ to: email, subject, html, text }).catch((err) => {
+            console.error("Failed to send invitation email:", err);
+          });
         try {
-          await sendEmail({ to: email, subject, html, text });
-        } catch (err) {
-          console.error("Failed to send invitation email:", err);
+          after(deliver);
+        } catch {
+          // after() needs a request context — outside one (a script, a test),
+          // fall back to awaiting so the mail still goes out.
+          await deliver();
         }
       },
     }),
