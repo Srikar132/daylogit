@@ -37,21 +37,12 @@ export const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary", "boo
 // a fixed minimum height on its own, so a floor on top of that just leaves
 // dead space below a card with no description.
 export const AUTO_HEIGHT_MIN: Record<string, number> = { markdown: 240, "project-doc": 200, gallery: 200 };
-// Media needs right-click/video controls to work immediately, not after an
-// extra double-click — the entered-gating built for text/board widgets
-// would otherwise block the whole point of this widget.
-// Project-doc, bookmark, and gallery cards only have link clicks + small
-// buttons, nothing that needs entered-mode's inline-typing gating either.
-// Board needs this too — search input, filter dropdown, and dnd-kit card
-// drag-and-drop all need to work on first touch, not after a double-click.
-export const ALWAYS_INTERACTIVE_WIDGET_TYPES = new Set([
-  "media",
-  "project-doc",
-  "bookmark",
-  "gallery",
-  "mail-summary",
-  "board",
-]);
+// Widgets that own a text caret. These are the only ones with an `editing`
+// phase, because they're the only ones where a drag is ambiguous: inside text
+// it must select characters, on the card it must reposition. Every other
+// widget (media controls, board inputs, links, buttons) is simply live from
+// the first click in `select` mode — see lib/canvas/widget-interaction.ts.
+export const TEXT_EDITING_WIDGET_TYPES = new Set(["markdown"]);
 
 // Fixed 3-column board — wide enough that all three "To Do / In Progress /
 // Completed" columns are visible without horizontal scroll on a typical
@@ -143,7 +134,7 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
     canWrite: ctx.canWrite,
     resizable: !NON_RESIZABLE_WIDGET_TYPES.has(item.type),
     minHeight: autoMin,
-    alwaysInteractive: ALWAYS_INTERACTIVE_WIDGET_TYPES.has(item.type),
+    textEditing: TEXT_EDITING_WIDGET_TYPES.has(item.type),
     widgetType: item.type,
     widgetData: item.data,
     columns: item.type === "board" ? ctx.columns : undefined,
@@ -162,9 +153,9 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
     width: item.width,
     height,
     dragHandle: undefined,
-    // Idle by default — a drag starting on an unselected widget falls
-    // through to the pane's own pan instead of moving the card. WidgetNode
-    // flips this to `true` once the widget is single-clicked (selected).
+    // WidgetNode owns this from here on, derived from the canvas mode and the
+    // widget's phase (lib/canvas/widget-interaction.ts). Starting false means
+    // the first frame — before that effect runs — can't accidentally drag.
     draggable: false,
     data: data as unknown as Record<string, unknown>,
   };

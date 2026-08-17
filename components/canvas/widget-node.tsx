@@ -4,7 +4,9 @@ import { NodeResizer, type NodeProps } from "@xyflow/react";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
+import { useCanvasMode } from "@/components/canvas/canvas-mode-context";
 import { WidgetChromeProvider } from "@/components/canvas/widget-chrome-context";
+import { resolveWidgetChrome, widgetChromeClassName, widgetPhase } from "@/lib/canvas/widget-interaction";
 import { BoardWidget } from "@/components/canvas/board-widget";
 import { BookmarkWidget } from "@/components/canvas/bookmark-widget";
 import { GalleryWidget } from "@/components/canvas/gallery-widget";
@@ -37,10 +39,11 @@ export type WidgetNodeData = {
    *  children to fill it (they resolve as `auto` per spec), so the floor
    *  has to live on the box that actually needs to grow. */
   minHeight?: number;
-  /** Skips the double-click-to-enter gating — the body is interactive right
-   *  away. For widgets like media, where link clicks/video controls need to
-   *  work immediately rather than after an extra double-click step. */
-  alwaysInteractive?: boolean;
+  /** This widget owns a text caret, so it needs the `editing` phase: inside it
+   *  a drag must select characters, which conflicts with dragging to
+   *  reposition. Everything else is interactive from the first click and needs
+   *  no phase of its own. */
+  textEditing?: boolean;
   widgetType: string;
   widgetData?: Record<string, unknown>;
   /** Only populated for type "board". */
@@ -134,33 +137,33 @@ const RESIZE_MIN_HEIGHT = 100;
 
 export function WidgetNode({ id, data, selected }: NodeProps) {
   const widgetData = data as unknown as WidgetNodeData;
-  const { title, resizable = true, minHeight, alwaysInteractive = false } = widgetData;
-  const [entered, setEntered] = useState(false);
+  const { title, resizable = true, minHeight, textEditing = false } = widgetData;
+  const [editing, setEditing] = useState(false);
+  const [enterPoint, setEnterPoint] = useState<{ x: number; y: number } | null>(null);
   const [floatingToolbar, setFloatingToolbar] = useState<React.ReactNode | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const { setWidgetDraggable, setWidgetSelected } = useCanvasActions();
+  const { mode } = useCanvasMode();
 
-  // Three states, one derived rule: idle (draggable=false, a drag anywhere on
-  // the card falls through to the pane's own pan) -> selected (single click;
-  // draggable=true, a subsequent drag repositions it) -> interactive (double-
-  // click/tap "enters" the widget; draggable locks back to false so trying
-  // to hit a button/link can't also drag the card). xyflow attaches its own
-  // node-drag handler only when `draggable` is true, so this one flag is the
-  // whole mechanism — no custom drag pass-through needed.
-  useEffect(() => {
-    setWidgetDraggable(id, selected && !entered);
-  }, [id, selected, entered, setWidgetDraggable]);
+  const phase = widgetPhase({ selected, editing });
+  const chrome = resolveWidgetChrome(mode, phase, { resizable });
 
-  // Stepping "inside" a widget (double-click/double-tap) makes its body
-  // directly interactive; clicking anywhere outside, or Escape, steps back
-  // out to fully idle (deselecting too — outside clicks on UI outside
-  // xyflow's own DOM, like the toolbar or workspace chrome, won't trigger
-  // xyflow's own pane-click deselect on their own).
+  // xyflow attaches its own node-drag handler only when `draggable` is true,
+  // so this one flag is the whole reposition mechanism.
   useEffect(() => {
-    if (!entered && !selected) return;
+    setWidgetDraggable(id, chrome.draggable);
+  }, [id, chrome.draggable, setWidgetDraggable]);
+
+  // Leaving a widget: clicking anywhere outside it, or Escape, drops back to
+  // idle and deselects. Deselecting has to be explicit — clicks on UI outside
+  // xyflow's own DOM (the toolbar, workspace chrome) never reach its
+  // pane-click deselect.
+  useEffect(() => {
+    if (!editing && !selected) return;
 
     function exitToIdle() {
-      setEntered(false);
+      setEditing(false);
+      setEnterPoint(null);
       setWidgetSelected(id, false);
     }
 
@@ -196,9 +199,8 @@ export function WidgetNode({ id, data, selected }: NodeProps) {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [entered, selected, id, setWidgetSelected]);
+  }, [editing, selected, id, setWidgetSelected]);
 
-  const isEntered = alwaysInteractive || entered;
   // Media has no background of its own (the image/video fills the card);
   // every other type needs one to actually read as a card now that none of
   // them have a bordered/bg'd header container anymore. Markdown keeps its
@@ -209,50 +211,40 @@ export function WidgetNode({ id, data, selected }: NodeProps) {
       : (widgetData.widgetData?.bgColor as string | undefined);
 
   return (
-    <div ref={rootRef} className="relative h-full w-full" title={title} onDoubleClick={() => setEntered(true)}>
+    <div
+      ref={rootRef}
+      className="relative h-full w-full"
+      title={title}
+      onDoubleClick={(e) => {
+        // Only text-editing widgets have an `editing` phase to enter; for the
+        // rest the body is already live, and entering would just take their
+        // resize controls away.
+        if (!textEditing) return;
+        setEditing(true);
+        setEnterPoint({ x: e.clientX, y: e.clientY });
+      }}
+    >
       <div
         style={{ ...(minHeight ? { minHeight } : undefined), ...(cardBg ? { backgroundColor: cardBg } : undefined) }}
-        className={`widget-card-shell h-full w-full touch-manipulation overflow-hidden transition-all ${entered ? "ring-2 ring-white/40 shadow-[0_0_20px_rgba(255,255,255,0.15)]" : selected ? "ring-2 ring-white/20 shadow-[0_0_15px_rgba(255,255,255,0.1)]" : ""
-          } ${isEntered
-            ? // `nodrag` only locks once the user actually double-clicked in —
-            // alwaysInteractive widgets (media/bookmark/project-doc) skip that
-            // gate by design, so they'd otherwise be permanently nodrag'd with
-            // no way left to grab their body and reposition them at all, now
-            // that there's no header handle to fall back on. Their own
-            // genuinely-interactive sub-elements (a link, a button) carry
-            // `nodrag` themselves instead of the whole card claiming it.
-            `nowheel ${entered ? "nodrag" : ""}`
-            : "pointer-events-none"
-          } ${
-            // Cursor tracks the REAL entered state, not isEntered — an
-            // alwaysInteractive widget's body stays clickable (pointer-events
-            // above) even when idle/selected, but the cursor still needs to
-            // read grab there like every other widget; only actually being
-            // entered (double-clicked in) drops it to a normal pointer. Any
-            // genuinely-interactive sub-element (a link, a button) carries
-            // its own explicit cursor class that wins over this by CSS
-            // specificity, so this doesn't fight real click targets.
-            entered ? "cursor-auto" : "cursor-grab active:cursor-grabbing"
-          }`}
+        className={`widget-card-shell h-full w-full touch-manipulation overflow-hidden transition-all ${widgetChromeClassName(chrome, phase)}`}
       >
-        <WidgetChromeProvider value={{ entered: isEntered, setFloatingToolbar }}>
+        <WidgetChromeProvider value={{ editing, enterPoint, setFloatingToolbar }}>
           {renderWidgetBody(id, widgetData)}
         </WidgetChromeProvider>
       </div>
 
       {/* Toolbar sits above the card, outside its overflow-hidden clip —
           per-card, not one shared canvas-wide bar. */}
-      {entered && floatingToolbar && (
+      {editing && floatingToolbar && (
         <div className="nodrag absolute inset-x-0 bottom-full z-10 mb-2 flex justify-center">
           {floatingToolbar}
         </div>
       )}
 
-      {resizable && (
+      {chrome.showResizeControls && (
         <NodeResizer
           minWidth={RESIZE_MIN_WIDTH}
           minHeight={RESIZE_MIN_HEIGHT}
-          isVisible={selected}
           lineClassName={RESIZE_LINE_CLASS}
           lineStyle={RESIZE_LINE_STYLE}
           handleClassName={RESIZE_HANDLE_CLASS}

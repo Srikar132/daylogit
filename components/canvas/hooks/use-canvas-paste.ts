@@ -6,17 +6,14 @@ const MEDIA_MIME_PATTERN = /^(image|video)\//;
 // caption, multiple lines) becomes a note instead.
 const URL_PASTE_PATTERN = /^https?:\/\/\S+$/i;
 
-// A pasted plain-text note needs a real Tiptap doc, not a bare string — one
-// paragraph per line, same shape markdown-widget.tsx already accepts for
-// notes saved before the {content, bgColor} wrapper existed.
-function textToMarkdownDoc(text: string) {
-  return {
-    type: "doc",
-    content: text.split(/\r\n|\r|\n/).map((line) => ({
-      type: "paragraph",
-      content: line ? [{ type: "text", text: line }] : [],
-    })),
-  };
+// A paste that lands in a text field or a rich-text editor belongs to that
+// field, not the canvas. This listener is on `document`, so without this check
+// every paste inside a widget's own input/editor ALSO spawned a stray note or
+// bookmark next to it.
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], .ProseMirror"));
 }
 
 interface UseCanvasPasteArgs {
@@ -50,6 +47,7 @@ export function useCanvasPaste({
 
     function handlePaste(e: ClipboardEvent) {
       if (!canWrite) return;
+      if (e.defaultPrevented || isEditableTarget(e.target)) return;
       const items = e.clipboardData?.items;
       if (!items) return;
 
@@ -79,8 +77,11 @@ export function useCanvasPaste({
         const id = addWidget("bookmark", dropPoint);
         updateWidgetData(id, { pendingUrl: text });
       } else {
+        // Handed over as raw markdown source, not a pre-built doc: parsing it
+        // needs the note's own editor (its extensions decide which nodes the
+        // markdown can even produce), so MarkdownWidget consumes this on mount.
         const id = addWidget("markdown", dropPoint);
-        updateWidgetData(id, textToMarkdownDoc(text));
+        updateWidgetData(id, { pendingMarkdown: text });
       }
     }
 

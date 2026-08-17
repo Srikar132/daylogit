@@ -12,10 +12,11 @@ import { TableHeader } from "@tiptap/extension-table-header";
 import { TableCell } from "@tiptap/extension-table-cell";
 import { TaskList } from "@tiptap/extension-task-list";
 import { TaskItem } from "@tiptap/extension-task-item";
-import { Markdown } from "tiptap-markdown";
+import { Markdown } from "@tiptap/markdown";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FontSize } from "@/lib/tiptap/font-size";
 import { MarkdownPasteHandler } from "@/lib/tiptap/markdown-paste";
+import { normalizeMarkdownSource } from "@/lib/tiptap/markdown-signal";
 import { useWidgetChrome } from "@/components/canvas/widget-chrome-context";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
 import { NoteToolbar } from "@/components/canvas/note-toolbar";
@@ -34,12 +35,14 @@ interface MarkdownWidgetProps {
 // Older notes stored the raw Tiptap doc directly as widgetData; notes saved
 // after the card-background feature wrap it as { content, bgColor } instead
 // — detect a raw doc by its "type": "doc" field to stay compatible with both.
-function isWrappedData(data: Record<string, unknown>): data is { content?: Record<string, unknown>; bgColor?: string } {
+function isWrappedData(
+  data: Record<string, unknown>,
+): data is { content?: Record<string, unknown>; bgColor?: string; pendingMarkdown?: string } {
   return data.type !== "doc";
 }
 
 export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetProps) {
-  const { entered, setFloatingToolbar } = useWidgetChrome();
+  const { editing, enterPoint, setFloatingToolbar } = useWidgetChrome();
   const { updateWidgetData, deleteWidget } = useCanvasActions();
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bumped on every editor transaction so bold/italic/etc. active-state
@@ -49,6 +52,11 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
   const wrapped = initialContent && isWrappedData(initialContent) ? initialContent : undefined;
   const initialDoc = wrapped ? wrapped.content : initialContent;
   const [bgColor, setBgColor] = useState<string | undefined>(wrapped?.bgColor);
+  // Set by a canvas paste (use-canvas-paste.ts) — raw markdown source that
+  // only this editor can parse, since its extension set is what decides which
+  // nodes (tables, task lists, ...) the markdown is allowed to produce.
+  const pendingMarkdown = typeof wrapped?.pendingMarkdown === "string" ? wrapped.pendingMarkdown : undefined;
+  const consumedPendingMarkdown = useRef(false);
 
   const editor = useEditor({
     extensions: [
@@ -64,19 +72,17 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
       TableCell,
       TaskList,
       TaskItem.configure({ nested: true }),
-      // Parses pasted markdown syntax (headings, code fences, tables, ...)
-      // into real editor nodes instead of inserting the raw text verbatim —
-      // storage stays ProseMirror JSON either way, this only affects paste.
-      Markdown.configure({ transformPastedText: true, transformCopiedText: false }),
-      // tiptap-markdown's own paste hook only fires when the clipboard has
-      // NO html flavor — most copy sources (browser, chat apps, editors)
-      // attach one regardless, so it never actually engages on its own.
-      // This forces markdown parsing whenever the plain-text payload looks
-      // like real markdown source, independent of what html came with it.
+      // Markdown parse/serialize. Storage stays ProseMirror JSON — this only
+      // matters when something explicitly passes contentType: "markdown".
+      // breaks: a single newline is a hard break, not a paragraph
+      // continuation, so pasted multi-line text keeps the lines as pasted.
+      Markdown.configure({ markedOptions: { gfm: true, breaks: true } }),
+      // The extension above never engages on paste by itself — it parses only
+      // for explicit contentType: "markdown" callers. This supplies that.
       MarkdownPasteHandler,
     ],
     content: initialDoc ?? "",
-    editable: entered && canWrite,
+    editable: editing && canWrite,
     immediatelyRender: false,
     editorProps: {
       attributes: { spellcheck: "false" },
@@ -99,14 +105,33 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
   );
 
   useEffect(() => {
+    if (!editor || !pendingMarkdown || consumedPendingMarkdown.current) return;
+    consumedPendingMarkdown.current = true;
+    editor.commands.setContent(normalizeMarkdownSource(pendingMarkdown), { contentType: "markdown" });
+    updateWidgetData(id, { content: editor.getJSON(), bgColor });
+  }, [editor, pendingMarkdown, id, bgColor, updateWidgetData]);
+
+  useEffect(() => {
     // Second arg suppresses setEditable's own "update" event — without it,
     // just entering/exiting the note (which flips editable) fires onUpdate
     // and queues a save even though nothing was actually typed.
-    editor?.setEditable(entered && canWrite, false);
-  }, [editor, entered, canWrite]);
+    editor?.setEditable(editing && canWrite, false);
+  }, [editor, editing, canWrite]);
+
+  // The double-click/tap that entered the note landed on a
+  // `pointer-events-none` body, so ProseMirror never saw it and the caret
+  // would otherwise sit at the start of the document no matter where the user
+  // aimed. Replay that point as a real text position. Runs after the
+  // setEditable effect above on purpose — focusing a non-editable view puts
+  // the caret nowhere.
+  useEffect(() => {
+    if (!editor || !editing || !canWrite) return;
+    const pos = enterPoint ? editor.view.posAtCoords({ left: enterPoint.x, top: enterPoint.y }) : null;
+    editor.commands.focus(pos ? pos.pos : "end");
+  }, [editor, editing, canWrite, enterPoint]);
 
   useEffect(() => {
-    if (!entered || !editor) {
+    if (!editing || !editor) {
       setFloatingToolbar(null);
       return;
     }
@@ -119,20 +144,15 @@ export function MarkdownWidget({ id, initialContent, canWrite }: MarkdownWidgetP
       />,
     );
     return () => setFloatingToolbar(null);
-  }, [entered, editor, id, bgColor, deleteWidget, handleBgColorChange, setFloatingToolbar]);
+  }, [editing, editor, id, bgColor, deleteWidget, handleBgColorChange, setFloatingToolbar]);
 
   if (!editor) return null;
 
   return (
-    <div
-      className={`h-full min-h-0 flex-1 overflow-y-auto scrollbar-thin px-3 py-2 ${
-        // Only nodrag+nowheel once entered — un-entered, this needs to stay
-        // a normal (non-exempted) surface so grabbing it drags the whole
-        // chromeless node, same as media. Once entered, scrolling/selecting
-        // text shouldn't be hijacked by the canvas's own pan/zoom.
-        entered ? "nodrag nowheel cursor-text" : "cursor-grab"
-      }`}
-    >
+    // nodrag/nowheel/cursor all come from the card shell's chrome (see
+    // lib/canvas/widget-interaction.ts) — they apply to descendants, so
+    // restating them here would just be a second copy of the same rules.
+    <div className="h-full min-h-0 flex-1 overflow-y-auto scrollbar-thin px-3 py-2">
       <EditorContent editor={editor} className="prose-note h-full text-[13.5px] text-[#e8eaed]" />
     </div>
   );

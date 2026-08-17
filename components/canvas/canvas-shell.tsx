@@ -3,11 +3,14 @@
 import "@xyflow/react/dist/style.css";
 import { ReactFlow, ReactFlowProvider, Controls, MiniMap, useReactFlow } from "@xyflow/react";
 import { DndContext, DragOverlay } from "@dnd-kit/core";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { WidgetNode } from "@/components/canvas/widget-node";
 import { WidgetToolbar, ToolbarDragGhost } from "@/components/canvas/widget-toolbar";
+import { CanvasModeToolbar } from "@/components/canvas/canvas-mode-toolbar";
+import { CanvasModeProvider } from "@/components/canvas/canvas-mode-context";
 import { CanvasActionsProvider } from "@/components/canvas/canvas-actions-context";
+import { CANVAS_CLASS_BY_MODE, FLOW_PROPS_BY_MODE, type CanvasMode } from "@/lib/canvas/widget-interaction";
 import { useWidgetLayout } from "@/components/canvas/hooks/use-widget-layout";
 import { useWidgetActions } from "@/components/canvas/hooks/use-widget-actions";
 import { useToolbarDrag } from "@/components/canvas/hooks/use-toolbar-drag";
@@ -82,6 +85,11 @@ function CanvasInner({
     clearPendingFile,
   } = useWidgetActions({ ctx, setNodes });
 
+  // Grab is the default — opening a canvas starts by looking around it, and a
+  // stray first drag pans instead of marquee-selecting or nudging a widget.
+  const [mode, setMode] = useState<CanvasMode>("grab");
+  const flowProps = FLOW_PROPS_BY_MODE[mode];
+
   const { screenToFlowPosition } = useReactFlow();
   const { dndSensors, draggingType, handleDragStart, handleDragEnd } = useToolbarDrag({
     addWidget,
@@ -102,6 +110,7 @@ function CanvasInner({
     // count) shifts that counter differently between the server render
     // and the client hydration pass, causing a hydration mismatch warning.
     <DndContext id="canvas-widget-toolbar" sensors={dndSensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <CanvasModeProvider value={{ mode, setMode }}>
       <CanvasActionsProvider
         value={{
           updateWidgetData,
@@ -123,7 +132,8 @@ function CanvasInner({
             fitView
             fitViewOptions={{ padding: 0.15 }}
             proOptions={{ hideAttribution: true }}
-            className="bg-[#1e1f20]"
+            className={`bg-[#1e1f20] ${CANVAS_CLASS_BY_MODE[mode]}`}
+            {...flowProps}
             // Off-screen widgets stop mounting entirely — their own data
             // fetching (useQuery, Tiptap init, etc.) doesn't fire until
             // scrolled into view, so this scales down with widget count
@@ -138,6 +148,9 @@ function CanvasInner({
           </ReactFlow>
         </div>
       </CanvasActionsProvider>
+
+      <CanvasModeToolbar />
+      </CanvasModeProvider>
 
       <WidgetToolbar canWrite={canWrite} />
 
