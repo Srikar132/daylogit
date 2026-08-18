@@ -1,0 +1,75 @@
+# Judge0 — the sandbox that runs code submitted from the code widget.
+#
+# Deployed on our own box (AWS VM) rather than a hosted plan: Judge0 CE on
+# RapidAPI requires a card for its $0 tier, and Piston's public API went
+# whitelist-only in Feb 2026. Self-hosting also avoids the failure that killed
+# self-hosted Piston — the judge0/judge0 image ships every compiler baked in, so it
+# downloads nothing at run time and needs no outbound network access.
+#
+# `privileged: true` is not optional: Judge0 runs each submission under isolate,
+# which needs to create cgroups and namespaces.
+#
+# Deploy:
+#   cp judge0.conf.example judge0.conf
+#   # edit judge0.conf: set both passwords AND AUTHN_TOKEN (see the warning there)
+#   docker compose up -d
+#   curl -H "X-Auth-Token: $AUTHN_TOKEN" http://127.0.0.1:2358/languages
+#
+# Then set JUDGE0_URL (the public https:// address) and JUDGE0_KEY (the same
+# AUTHN_TOKEN) in the app's environment. Leave JUDGE0_HOST empty — that variable
+# exists only to switch authentication over to RapidAPI's headers.
+#
+# Port 2358 is published on the loopback interface only. Put a TLS terminator in
+# front of it and let that be the only thing the security group exposes: the app
+# calls this from a serverless function over the public internet, so it has to be
+# reachable, and Judge0 speaks plain HTTP with a shared-secret header — which is
+# only a secret if the connection is encrypted.
+
+name: judge0
+
+services:
+  server:
+    image: judge0/judge0:1.13.1
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+    ports:
+      - "127.0.0.1:2358:2358"
+    privileged: true
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+
+  # Judge0 splits the API from the sandbox: the server enqueues submissions and
+  # this runs them. Both need the same config and the same privileges.
+  workers:
+    image: judge0/judge0:1.13.1
+    command: ["./scripts/workers"]
+    volumes:
+      - ./judge0.conf:/judge0.conf:ro
+    privileged: true
+    restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:16.2
+    env_file: judge0.conf
+    volumes:
+      - judge0_db:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2.4
+    command:
+      [
+        "bash",
+        "-c",
+        'docker-entrypoint.sh --appendonly no --requirepass "$$REDIS_PASSWORD"',
+      ]
+    env_file: judge0.conf
+    restart: unless-stopped
+
+volumes:
+  judge0_db:

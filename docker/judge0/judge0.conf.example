@@ -1,0 +1,55 @@
+# Judge0 configuration. Copy to judge0.conf and fill in the passwords and tokens.
+# judge0.conf is gitignored — it holds real credentials.
+#
+# Judge0 reads this file directly AND docker-compose passes it to postgres/redis
+# as an env_file, which is why the database and cache credentials live here
+# rather than being split across files.
+
+################################################################################
+# Postgres
+################################################################################
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+POSTGRES_DB=judge0
+POSTGRES_USER=judge0
+POSTGRES_PASSWORD=change-me-postgres
+
+################################################################################
+# Redis
+################################################################################
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=change-me-redis
+
+################################################################################
+# Submission limits
+#
+# These are the ceilings the API will accept per submission. The app asks for
+# cpu_time_limit 5 / wall 10 / memory 128000 (see lib/judge0.ts), so these have to
+# be at least that or Judge0 rejects the request outright.
+################################################################################
+CPU_TIME_LIMIT=15
+MAX_CPU_TIME_LIMIT=20
+WALL_TIME_LIMIT=20
+MAX_WALL_TIME_LIMIT=30
+MEMORY_LIMIT=256000
+MAX_MEMORY_LIMIT=512000
+MAX_QUEUE_SIZE=100
+
+################################################################################
+# Auth — REQUIRED for any instance reachable from the internet.
+#
+# Judge0 runs arbitrary submitted code. Without AUTHN_TOKEN, anyone who finds the
+# URL can execute whatever they like on this box: mine crypto, scan your VPC, use
+# it as a proxy. The token is the only thing standing between the open internet and
+# a code execution service.
+#
+# Generate one and set the SAME value as JUDGE0_KEY in the app's environment (the
+# app sends it as X-Auth-Token whenever JUDGE0_HOST is empty):
+#   openssl rand -hex 32
+################################################################################
+AUTHN_TOKEN=
+
+# Separate token for the /workers and /statistics admin endpoints. Worth setting
+# to something different so a leaked submission token can't also read the queue.
+AUTHZ_TOKEN=

@@ -10,6 +10,7 @@ import { resolveWidgetChrome, widgetChromeClassName, widgetPhase } from "@/lib/c
 import { isWidgetResizable } from "@/components/canvas/widget-registry";
 import { BoardWidget } from "@/components/canvas/board-widget";
 import { BookmarkWidget } from "@/components/canvas/bookmark-widget";
+import { CodeWidget } from "@/components/canvas/code-widget";
 import { GalleryWidget } from "@/components/canvas/gallery-widget";
 import { MailSummaryWidget } from "@/components/canvas/mail-summary-widget";
 import { MediaWidget } from "@/components/canvas/media-widget";
@@ -72,6 +73,8 @@ function renderWidgetBody(id: string, data: WidgetNodeData): React.ReactNode {
       return <BoardWidget slug={data.slug ?? ""} columns={data.columns ?? []} canWrite={data.canWrite} />;
     case "bookmark":
       return <BookmarkWidget id={id} canWrite={data.canWrite} widgetData={data.widgetData} />;
+    case "code":
+      return <CodeWidget id={id} slug={data.slug ?? ""} canWrite={data.canWrite} widgetData={data.widgetData} />;
     case "gallery": {
       const albumId = data.widgetData?.albumId;
       return (

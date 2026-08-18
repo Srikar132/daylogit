@@ -14,7 +14,8 @@
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "postinstall": "node scripts/copy-monaco.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -22,6 +23,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@modelcontextprotocol/sdk": "^1.26.0",
+    "@monaco-editor/react": "^4.7.0",
     "@neondatabase/serverless": "^1.1.0",
     "@tanstack/query-sync-storage-persister": "^5.101.4",
     "@tanstack/react-query": "^5.101.4",
@@ -44,6 +46,7 @@
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.2",
     "@xyflow/react": "^12.11.3",
+    "ai": "^6.0.256",
     "better-auth": "^1.6.27",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.10.0",
@@ -52,6 +55,7 @@
     "framer-motion": "^13.1.0",
     "lucide-react": "^1.27.0",
     "mcp-handler": "^1.1.0",
+    "monaco-editor": "^0.56.0",
     "next": "16.2.12",
     "nodemailer": "^9.0.5",
     "open-graph-scraper": "^6.12.0",

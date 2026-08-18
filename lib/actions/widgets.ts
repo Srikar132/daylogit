@@ -94,6 +94,26 @@ export async function getMyWidgetLayout(): Promise<WidgetLayoutItem[]> {
   return merged;
 }
 
+/** One widget by id, scoped to the viewer's workspace.
+ *
+ *  The code editor opens in its own browser window, so it loads server-side from
+ *  the route rather than inheriting anything from the canvas — a window opened
+ *  directly by URL has no canvas to inherit from. Returns undefined for an id
+ *  from another workspace, which the route turns into a 404. */
+export async function getWidgetById(id: string): Promise<WidgetLayoutItem | undefined> {
+  const parsedId = idSchema.safeParse(id);
+  if (!parsedId.success) return undefined;
+
+  const viewer = await requireViewerContext();
+  const [row] = await db
+    .select()
+    .from(widgets)
+    .where(widgetWhere(parsedId.data, viewer.organizationId))
+    .limit(1);
+
+  return row ? rowToItem(row) : undefined;
+}
+
 export async function createWidgetAction(item: WidgetLayoutItem): Promise<{ error?: string }> {
   const parsed = layoutItemSchema.safeParse(item);
   if (!parsed.success) return { error: "Invalid widget." };

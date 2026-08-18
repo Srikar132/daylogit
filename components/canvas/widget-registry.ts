@@ -13,10 +13,11 @@ import type { GmailMessageSummary } from "@/lib/gmail";
  * canvas-shell.tsx's component body.
  */
 
-export const MULTI_INSTANCE_WIDGET_TYPES = new Set(["bookmark", "gallery", "markdown", "media", "project-doc"]);
+export const MULTI_INSTANCE_WIDGET_TYPES = new Set(["bookmark", "code", "gallery", "markdown", "media", "project-doc"]);
 export const KNOWN_WIDGET_TYPES = new Set([
   "board",
   "bookmark",
+  "code",
   "gallery",
   "mail-summary",
   "markdown",
@@ -26,7 +27,11 @@ export const KNOWN_WIDGET_TYPES = new Set([
 // Bookmark is a compact, fixed-format row (icon + text) — its height should
 // always hug its own content, never be dragged to an arbitrary size (the
 // reference design has no resize handles on it at all).
-export const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary", "bookmark", "gallery"]);
+// Code is here for the same reason as bookmark: the card is a compact fixed
+// format (title + language + one line of source) and the editing surface is a
+// separate browser window, so there is nothing on the canvas that benefits from
+// being dragged larger.
+export const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary", "bookmark", "code", "gallery"]);
 
 // Floor for widget types that auto-size to content (no persisted height yet)
 // — without this an almost-empty note would render as a sliver. Height still
@@ -78,6 +83,9 @@ export const NEW_WIDGET_DEFAULTS: Record<string, { width: number; height?: numbe
   // Height omitted — same reasoning as project-doc: a draft name form and
   // a filled-out fan-card preview are different heights.
   gallery: { width: 300 },
+  // Height omitted — the card grows by one line once a generated exercise gives
+  // it a title, and nothing about it scrolls.
+  code: { width: 320 },
 };
 
 // Deliberately just plain data — no callbacks here. Mutation handlers
@@ -132,6 +140,8 @@ export function widgetTitle(type: string): string {
       return "Board";
     case "bookmark":
       return "Bookmark";
+    case "code":
+      return "Code";
     case "gallery":
       return "Gallery";
     case "mail-summary":
@@ -160,7 +170,7 @@ export function widgetTitle(type: string): string {
  * Excluded on purpose: board, mail-summary and media want a fixed viewport with
  * their own internal scrolling, not a card that grows to the length of a list.
  */
-const CONTENT_HEIGHT_TYPES = new Set(["markdown", "project-doc", "bookmark", "gallery"]);
+const CONTENT_HEIGHT_TYPES = new Set(["markdown", "project-doc", "bookmark", "code", "gallery"]);
 
 /**
  * A stored height is a FLOOR for these types, not a fixed size.
