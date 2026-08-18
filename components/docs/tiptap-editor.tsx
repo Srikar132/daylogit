@@ -1,21 +1,8 @@
 "use client";
 
 import { useEditor, EditorContent, type Editor, type JSONContent } from "@tiptap/react";
-import { StarterKit } from "@tiptap/starter-kit";
-import { TextStyle } from "@tiptap/extension-text-style";
-import { Color } from "@tiptap/extension-color";
-import { Highlight } from "@tiptap/extension-highlight";
-import { Placeholder } from "@tiptap/extension-placeholder";
-import { Table } from "@tiptap/extension-table";
-import { TableRow } from "@tiptap/extension-table-row";
-import { TableHeader } from "@tiptap/extension-table-header";
-import { TableCell } from "@tiptap/extension-table-cell";
-import { TaskList } from "@tiptap/extension-task-list";
-import { TaskItem } from "@tiptap/extension-task-item";
-import { Markdown } from "tiptap-markdown";
 import { useEffect, useRef } from "react";
-import { FontSize } from "@/lib/tiptap/font-size";
-import { MarkdownPasteHandler } from "@/lib/tiptap/markdown-paste";
+import { createNoteExtensions } from "@/lib/tiptap/note-extensions";
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -46,30 +33,7 @@ export function TiptapEditor({ content, onChange, editable, placeholder, classNa
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editor = useEditor({
-    extensions: [
-      StarterKit,
-      TextStyle,
-      Color,
-      Highlight.configure({ multicolor: true }),
-      FontSize,
-      Placeholder.configure({ placeholder: placeholder ?? "Write something…" }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      // Parses pasted markdown syntax (headings, code fences, tables, ...)
-      // into real editor nodes instead of inserting the raw text verbatim —
-      // storage stays ProseMirror JSON either way, this only affects paste.
-      Markdown.configure({ transformPastedText: true, transformCopiedText: false }),
-      // tiptap-markdown's own paste hook only fires when the clipboard has
-      // NO html flavor — most copy sources (browser, chat apps, editors)
-      // attach one regardless, so it never actually engages on its own.
-      // This forces markdown parsing whenever the plain-text payload looks
-      // like real markdown source, independent of what html came with it.
-      MarkdownPasteHandler,
-    ],
+    extensions: createNoteExtensions({ placeholder: placeholder ?? "Write something…" }),
     content: content ?? "",
     editable,
     immediatelyRender: false,
@@ -78,6 +42,10 @@ export function TiptapEditor({ content, onChange, editable, placeholder, classNa
     },
     onFocus: ({ editor }) => onFocusEditor?.(editor),
     onUpdate: ({ editor }) => {
+      // A read-only editor has nothing to persist; anything that still emits an
+      // update here (an extension normalising content, a programmatic command)
+      // must not turn into a save the server will reject.
+      if (!editor.isEditable) return;
       if (onChange) {
         if (saveTimer.current) clearTimeout(saveTimer.current);
         saveTimer.current = setTimeout(() => {
@@ -88,7 +56,11 @@ export function TiptapEditor({ content, onChange, editable, placeholder, classNa
   });
 
   useEffect(() => {
-    editor?.setEditable(editable);
+    // Second arg suppresses setEditable's own "update" event. Without it, just
+    // mounting (or flipping editable) emits an update, which fired onChange and
+    // saved every page on open — a wasted write for an owner, and a rejected
+    // "View-only access." save for an invited member who only opened the doc.
+    editor?.setEditable(editable, false);
   }, [editor, editable]);
 
   if (!editor) return null;

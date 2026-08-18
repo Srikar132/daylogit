@@ -3,13 +3,17 @@
 import "@xyflow/react/dist/style.css";
 import { ReactFlow, ReactFlowProvider, Controls, MiniMap, useReactFlow } from "@xyflow/react";
 import { DndContext, DragOverlay } from "@dnd-kit/core";
-import { useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { WidgetNode } from "@/components/canvas/widget-node";
 import { WidgetToolbar, ToolbarDragGhost } from "@/components/canvas/widget-toolbar";
+import { CanvasModeToolbar } from "@/components/canvas/canvas-mode-toolbar";
+import { CanvasModeProvider } from "@/components/canvas/canvas-mode-context";
 import { CanvasActionsProvider } from "@/components/canvas/canvas-actions-context";
+import { CANVAS_CLASS_BY_MODE, FLOW_PROPS_BY_MODE, type CanvasMode } from "@/lib/canvas/widget-interaction";
 import { useWidgetLayout } from "@/components/canvas/hooks/use-widget-layout";
 import { useWidgetActions } from "@/components/canvas/hooks/use-widget-actions";
+import { useSaveStatus } from "@/components/canvas/hooks/use-save-status";
 import { useToolbarDrag } from "@/components/canvas/hooks/use-toolbar-drag";
 import { useCanvasPaste } from "@/components/canvas/hooks/use-canvas-paste";
 import type { WidgetNodeContext } from "@/components/canvas/widget-registry";
@@ -19,7 +23,6 @@ import type { DocProjectSummary } from "@/lib/actions/docs";
 import type { AlbumPreview } from "@/lib/actions/albums";
 import type { GmailStatus } from "@/lib/actions/gmail";
 import type { GmailMessageSummary } from "@/lib/gmail";
-import type { WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
 
 const nodeTypes = { widget: WidgetNode };
 
@@ -32,7 +35,6 @@ interface CanvasShellProps {
   initialAlbumPreviews: Record<string, AlbumPreview>;
   initialGmailStatus: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
-  initialWorkspaceMembers?: WorkspaceMembersData;
 }
 
 function CanvasInner({
@@ -44,7 +46,6 @@ function CanvasInner({
   initialAlbumPreviews,
   initialGmailStatus,
   initialGmailMessages,
-  initialWorkspaceMembers,
 }: CanvasShellProps) {
   const ctx: WidgetNodeContext = useMemo(
     () => ({
@@ -55,7 +56,6 @@ function CanvasInner({
       initialAlbumPreviews,
       initialGmailStatus,
       initialGmailMessages,
-      initialWorkspaceMembers,
     }),
     [
       columns,
@@ -65,11 +65,13 @@ function CanvasInner({
       initialAlbumPreviews,
       initialGmailStatus,
       initialGmailMessages,
-      initialWorkspaceMembers,
     ],
   );
 
-  const { nodes, setNodes, onNodesChange, saveFailed } = useWidgetLayout(initialLayout, ctx);
+  // One save-failure signal for every widget write — content, position and
+  // size alike (see use-save-status.ts).
+  const saveStatus = useSaveStatus();
+  const { nodes, setNodes, onNodesChange } = useWidgetLayout(initialLayout, ctx, saveStatus);
   const {
     updateWidgetData,
     deleteWidget,
@@ -80,13 +82,27 @@ function CanvasInner({
     addMediaFiles,
     getPendingFile,
     clearPendingFile,
-  } = useWidgetActions({ ctx, setNodes });
+  } = useWidgetActions({ ctx, setNodes, saveStatus });
+
+  // Grab is the default — opening a canvas starts by looking around it, and a
+  // stray first drag pans instead of marquee-selecting or nudging a widget.
+  const [mode, setMode] = useState<CanvasMode>("grab");
+  const flowProps = FLOW_PROPS_BY_MODE[mode];
 
   const { screenToFlowPosition } = useReactFlow();
   const { dndSensors, draggingType, handleDragStart, handleDragEnd } = useToolbarDrag({
     addWidget,
     screenToFlowPosition,
   });
+  // Tap-to-add lands the widget in the middle of whatever the user is looking
+  // at, which is the only sensible target when there is no drop point.
+  const addWidgetAtViewportCenter = useCallback(
+    (type: string) => {
+      addWidget(type, screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }));
+    },
+    [addWidget, screenToFlowPosition],
+  );
+
   const { handleDragOverCanvas, handleDropOnCanvas } = useCanvasPaste({
     canWrite,
     addWidget,
@@ -102,6 +118,7 @@ function CanvasInner({
     // count) shifts that counter differently between the server render
     // and the client hydration pass, causing a hydration mismatch warning.
     <DndContext id="canvas-widget-toolbar" sensors={dndSensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <CanvasModeProvider value={{ mode, setMode }}>
       <CanvasActionsProvider
         value={{
           updateWidgetData,
@@ -123,7 +140,8 @@ function CanvasInner({
             fitView
             fitViewOptions={{ padding: 0.15 }}
             proOptions={{ hideAttribution: true }}
-            className="bg-[#1e1f20]"
+            className={`bg-[#1e1f20] ${CANVAS_CLASS_BY_MODE[mode]}`}
+            {...flowProps}
             // Off-screen widgets stop mounting entirely — their own data
             // fetching (useQuery, Tiptap init, etc.) doesn't fire until
             // scrolled into view, so this scales down with widget count
@@ -139,9 +157,12 @@ function CanvasInner({
         </div>
       </CanvasActionsProvider>
 
-      <WidgetToolbar canWrite={canWrite} />
+      <CanvasModeToolbar />
+      </CanvasModeProvider>
 
-      {saveFailed && (
+      <WidgetToolbar canWrite={canWrite} onAdd={addWidgetAtViewportCenter} />
+
+      {saveStatus.saveFailed && (
         <div className="pointer-events-none fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2 rounded-full border border-destructive/30 bg-popover/95 px-4 py-2 text-[12.5px] text-destructive shadow-2xl backdrop-blur-md">
           Couldn&apos;t save your changes — check your connection.
         </div>

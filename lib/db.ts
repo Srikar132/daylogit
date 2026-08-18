@@ -116,8 +116,13 @@ export const widgets = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex("widgets_id_org_user_uidx").on(table.id, table.organizationId, table.userId),
-    index("widgets_org_user_idx").on(table.organizationId, table.userId),
+    // A widget belongs to the WORKSPACE, so its app-level id is unique per
+    // organization — not per (organization, member). The old composite let the
+    // pinned defaults exist once per member of the same org, which is how one
+    // workspace ended up with two board-1 rows and forced the read to dedupe in
+    // JavaScript. Migration 0013 collapses those and narrows this.
+    uniqueIndex("widgets_id_org_uidx").on(table.id, table.organizationId),
+    index("widgets_org_idx").on(table.organizationId),
   ],
 );
 

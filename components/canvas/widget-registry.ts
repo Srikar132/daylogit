@@ -1,6 +1,5 @@
 import type { Node } from "@xyflow/react";
 import type { WidgetNodeData } from "@/components/canvas/widget-node";
-import type { WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
 import type { WidgetLayoutItem } from "@/lib/db";
 import type { BoardColumn } from "@/lib/worklog";
 import type { DocProjectSummary } from "@/lib/actions/docs";
@@ -14,21 +13,25 @@ import type { GmailMessageSummary } from "@/lib/gmail";
  * canvas-shell.tsx's component body.
  */
 
-export const MULTI_INSTANCE_WIDGET_TYPES = new Set(["bookmark", "gallery", "markdown", "media", "project-doc"]);
+export const MULTI_INSTANCE_WIDGET_TYPES = new Set(["bookmark", "code", "gallery", "markdown", "media", "project-doc"]);
 export const KNOWN_WIDGET_TYPES = new Set([
   "board",
   "bookmark",
+  "code",
   "gallery",
   "mail-summary",
   "markdown",
   "media",
   "project-doc",
-  "workspace-settings",
 ]);
 // Bookmark is a compact, fixed-format row (icon + text) — its height should
 // always hug its own content, never be dragged to an arbitrary size (the
 // reference design has no resize handles on it at all).
-export const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary", "bookmark", "gallery"]);
+// Code is here for the same reason as bookmark: the card is a compact fixed
+// format (title + language + one line of source) and the editing surface is a
+// separate browser window, so there is nothing on the canvas that benefits from
+// being dragged larger.
+export const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary", "bookmark", "code", "gallery"]);
 
 // Floor for widget types that auto-size to content (no persisted height yet)
 // — without this an almost-empty note would render as a sliver. Height still
@@ -37,32 +40,25 @@ export const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary", "boo
 // a fixed minimum height on its own, so a floor on top of that just leaves
 // dead space below a card with no description.
 export const AUTO_HEIGHT_MIN: Record<string, number> = { markdown: 240, "project-doc": 200, gallery: 200 };
-// Media needs right-click/video controls to work immediately, not after an
-// extra double-click — the entered-gating built for text/board widgets
-// would otherwise block the whole point of this widget.
-// Project-doc, bookmark, and gallery cards only have link clicks + small
-// buttons, nothing that needs entered-mode's inline-typing gating either.
-// Board needs this too — search input, filter dropdown, and dnd-kit card
-// drag-and-drop all need to work on first touch, not after a double-click.
-export const ALWAYS_INTERACTIVE_WIDGET_TYPES = new Set([
-  "media",
-  "project-doc",
-  "bookmark",
-  "gallery",
-  "mail-summary",
-  "board",
-]);
+// Widgets that own a text caret. These are the only ones with an `editing`
+// phase, because they're the only ones where a drag is ambiguous: inside text
+// it must select characters, on the card it must reposition. Every other
+// widget (media controls, board inputs, links, buttons) is simply live from
+// the first click in `select` mode — see lib/canvas/widget-interaction.ts.
+export const TEXT_EDITING_WIDGET_TYPES = new Set(["markdown"]);
 
 // Fixed 3-column board — wide enough that all three "To Do / In Progress /
 // Completed" columns are visible without horizontal scroll on a typical
 // desktop viewport. Mail summary sits beside it — fully self-contained, it
 // fetches/manages its own data and takes no props from the canvas.
-// Workspace settings is pinned the same way — never addable/removable (see
-// widget-toolbar.tsx's ADDABLE_WIDGET_TYPES and mergeWithDefaults below).
+// Workspace settings used to be pinned here as a third card; it lives at
+// /workspace/[slug]/settings now, reachable from the avatar menu. Dropping the
+// type from KNOWN_WIDGET_TYPES is what retires the existing rows: mergeWithDefaults
+// filters out anything whose type it no longer recognises, so saved copies stop
+// appearing without needing a data migration.
 export const DEFAULT_LAYOUT: WidgetLayoutItem[] = [
   { id: "board-1", type: "board", x: 40, y: 220, width: 1180, height: 660 },
   { id: "mail-summary-1", type: "mail-summary", x: 1260, y: 220, width: 340, height: 420 },
-  { id: "workspace-settings-1", type: "workspace-settings", x: 1260, y: 660, width: 360, height: 460 },
 ];
 
 // Height omitted for markdown — it sizes to its own content until the user
@@ -87,6 +83,9 @@ export const NEW_WIDGET_DEFAULTS: Record<string, { width: number; height?: numbe
   // Height omitted — same reasoning as project-doc: a draft name form and
   // a filled-out fan-card preview are different heights.
   gallery: { width: 300 },
+  // Height omitted — the card grows by one line once a generated exercise gives
+  // it a title, and nothing about it scrolls.
+  code: { width: 320 },
 };
 
 // Deliberately just plain data — no callbacks here. Mutation handlers
@@ -101,8 +100,39 @@ export type WidgetNodeContext = {
   initialAlbumPreviews: Record<string, AlbumPreview>;
   initialGmailStatus: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
-  initialWorkspaceMembers?: WorkspaceMembersData;
 };
+
+/**
+ * Whether this widget can be resized right now.
+ *
+ * Type alone isn't enough: bookmark and gallery cards hug their own content and
+ * shouldn't be dragged to arbitrary sizes, but both spend their first moments as
+ * a FORM — several inputs that need far more room than the finished card — and a
+ * form you can't resize is a form you can't fill in. So the type rule holds for a
+ * saved widget and lifts while one is still a draft.
+ *
+ * Draft-ness is read from the live widgetData rather than baked in at
+ * node-construction time, so a card stops being resizable the moment it's saved,
+ * without waiting for a reload.
+ */
+export function isWidgetResizable(type: string, widgetData?: Record<string, unknown>): boolean {
+  if (!NON_RESIZABLE_WIDGET_TYPES.has(type)) return true;
+  return isDraftWidget(type, widgetData);
+}
+
+/** True while a widget is still showing its creation form. */
+function isDraftWidget(type: string, widgetData?: Record<string, unknown>): boolean {
+  switch (type) {
+    // A saved bookmark has both a url and a title (see asBookmarkData);
+    // pendingUrl is the mid-fetch state, which is a spinner, not a form.
+    case "bookmark":
+      return typeof widgetData?.pendingUrl !== "string" && typeof widgetData?.url !== "string";
+    case "gallery":
+      return typeof widgetData?.albumId !== "string";
+    default:
+      return false;
+  }
+}
 
 export function widgetTitle(type: string): string {
   switch (type) {
@@ -110,6 +140,8 @@ export function widgetTitle(type: string): string {
       return "Board";
     case "bookmark":
       return "Bookmark";
+    case "code":
+      return "Code";
     case "gallery":
       return "Gallery";
     case "mail-summary":
@@ -120,20 +152,44 @@ export function widgetTitle(type: string): string {
       return "Media";
     case "project-doc":
       return "Project";
-    case "workspace-settings":
-      return "Workspace";
     default:
       return type;
   }
 }
 
+/**
+ * Widget types whose height should follow their content instead of being pinned.
+ *
+ * These all render more than one thing: a project card becomes a five-field form
+ * when edited, a bookmark is a compact row until it's a url form, a note is
+ * however many lines it holds. Pinning a height meant whatever the widget was
+ * measured or dragged to became a hard ceiling — so opening the edit form inside
+ * a 138px-tall card crushed it, and a note could never outgrow the box it was
+ * created in.
+ *
+ * Excluded on purpose: board, mail-summary and media want a fixed viewport with
+ * their own internal scrolling, not a card that grows to the length of a list.
+ */
+const CONTENT_HEIGHT_TYPES = new Set(["markdown", "project-doc", "bookmark", "code", "gallery"]);
+
+/**
+ * A stored height is a FLOOR for these types, not a fixed size.
+ *
+ * Leaving the node's height undefined lets xyflow measure it, so the card grows
+ * with whatever it currently renders; the stored value (what the user last
+ * dragged it to) comes back as a min-height so their sizing is still respected.
+ * Content decides the rest, in layout — no measuring in JS, no writing sizes back
+ * while rendering, and nothing that can feed back on itself.
+ */
+function resolveHeight(item: WidgetLayoutItem): { height?: number; minHeight?: number } {
+  if (CONTENT_HEIGHT_TYPES.has(item.type)) {
+    return { height: undefined, minHeight: item.height ?? AUTO_HEIGHT_MIN[item.type] };
+  }
+  return { height: item.height, minHeight: item.height === undefined ? AUTO_HEIGHT_MIN[item.type] : undefined };
+}
+
 export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node {
-  // Bookmark never keeps a stored height — any value sitting in the DB may
-  // be a leftover from a previous card design (e.g. a taller thumbnail
-  // layout) that no longer matches this type's actual content height, so
-  // it's always ignored in favor of auto-measuring the current content.
-  const height = item.type === "bookmark" ? undefined : item.height;
-  const autoMin = height === undefined ? AUTO_HEIGHT_MIN[item.type] : undefined;
+  const { height, minHeight } = resolveHeight(item);
 
   const docProjectId = item.type === "project-doc" ? (item.data?.docProjectId as string | undefined) : undefined;
   const albumId = item.type === "gallery" ? (item.data?.albumId as string | undefined) : undefined;
@@ -141,18 +197,18 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
   const data: WidgetNodeData = {
     title: widgetTitle(item.type),
     canWrite: ctx.canWrite,
-    resizable: !NON_RESIZABLE_WIDGET_TYPES.has(item.type),
-    minHeight: autoMin,
-    alwaysInteractive: ALWAYS_INTERACTIVE_WIDGET_TYPES.has(item.type),
+    minHeight,
+    textEditing: TEXT_EDITING_WIDGET_TYPES.has(item.type),
     widgetType: item.type,
     widgetData: item.data,
     columns: item.type === "board" ? ctx.columns : undefined,
-    slug: item.type === "project-doc" || item.type === "gallery" ? ctx.slug : undefined,
+    // Board needs this too, to scope its query key to this workspace
+    // (lib/query-keys.ts).
+    slug: ctx.slug,
     initialSummary: docProjectId ? ctx.initialProjectSummaries[docProjectId] : undefined,
     initialPreview: albumId ? ctx.initialAlbumPreviews[albumId] : undefined,
     initialGmailStatus: item.type === "mail-summary" ? ctx.initialGmailStatus : undefined,
     initialGmailMessages: item.type === "mail-summary" ? ctx.initialGmailMessages : undefined,
-    initialWorkspaceMembers: item.type === "workspace-settings" ? ctx.initialWorkspaceMembers : undefined,
   };
 
   return {
@@ -162,9 +218,9 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
     width: item.width,
     height,
     dragHandle: undefined,
-    // Idle by default — a drag starting on an unselected widget falls
-    // through to the pane's own pan instead of moving the card. WidgetNode
-    // flips this to `true` once the widget is single-clicked (selected).
+    // WidgetNode owns this from here on, derived from the canvas mode and the
+    // widget's phase (lib/canvas/widget-interaction.ts). Starting false means
+    // the first frame — before that effect runs — can't accidentally drag.
     draggable: false,
     data: data as unknown as Record<string, unknown>,
   };

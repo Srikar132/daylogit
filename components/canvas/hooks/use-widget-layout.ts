@@ -1,6 +1,7 @@
 import { useNodesState, type Node, type NodeChange } from "@xyflow/react";
 import { useMutation } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef } from "react";
+import { WIDGET_SAVE_RETRY, type SaveStatus } from "@/components/canvas/hooks/use-save-status";
 import { buildNode, type WidgetNodeContext } from "@/components/canvas/widget-registry";
 import { updateWidgetPositionAction, updateWidgetSizeAction } from "@/lib/actions/widgets";
 import { unwrapAction } from "@/lib/query-utils";
@@ -15,36 +16,42 @@ const SAVE_DEBOUNCE_MS = 500;
  * one-JSONB-blob-per-user design where any single change rewrote every
  * widget's data back to the server.
  */
-export function useWidgetLayout(initialLayout: WidgetLayoutItem[], ctx: WidgetNodeContext) {
+export function useWidgetLayout(
+  initialLayout: WidgetLayoutItem[],
+  ctx: WidgetNodeContext,
+  { reportSaveFailed, reportSaveSucceeded }: SaveStatus,
+) {
   const [nodes, setNodes, onNodesChangeInternal] = useNodesState<Node>(
     initialLayout.map((item) => buildNode(item, ctx)),
   );
 
-  const [saveFailed, setSaveFailed] = useState(false);
-
+// Only `mutate` is destructured, deliberately: useMutation returns a NEW result
+// object on every render, so a callback listing the whole mutation in its deps
+// changed identity every render. That is invisible until such a callback lands in
+// an effect's dependency array, where it produces an endless
+// effect -> setState -> render -> effect loop. `mutate` is referentially stable,
+// and naming it here keeps exhaustive-deps satisfied without reintroducing that.
   // One retry (react-query's built-in retry/retryDelay) absorbs a blip; if
   // it still fails after that, surface it instead of pretending it saved —
   // the edit would otherwise vanish silently on next reload.
-  const positionMutation = useMutation({
+  const { mutate: savePosition } = useMutation({
+    ...WIDGET_SAVE_RETRY,
     mutationFn: (input: { id: string; x: number; y: number }) => unwrapAction(updateWidgetPositionAction(input)),
-    retry: 1,
-    retryDelay: 2000,
     onError: (err) => {
       console.error("Failed to save widget position:", err);
-      setSaveFailed(true);
+      reportSaveFailed();
     },
-    onSuccess: () => setSaveFailed(false),
+    onSuccess: reportSaveSucceeded,
   });
 
-  const sizeMutation = useMutation({
+  const { mutate: saveSize } = useMutation({
+    ...WIDGET_SAVE_RETRY,
     mutationFn: (input: { id: string; width: number; height: number }) => unwrapAction(updateWidgetSizeAction(input)),
-    retry: 1,
-    retryDelay: 2000,
     onError: (err) => {
       console.error("Failed to save widget size:", err);
-      setSaveFailed(true);
+      reportSaveFailed();
     },
-    onSuccess: () => setSaveFailed(false),
+    onSuccess: reportSaveSucceeded,
   });
 
   // One debounce timer per widget id — dragging several widgets around
@@ -71,18 +78,18 @@ export function useWidgetLayout(initialLayout: WidgetLayoutItem[], ctx: WidgetNo
       for (const c of changes) {
         if (c.type === "position" && c.dragging === false && c.position) {
           const { x, y } = c.position;
-          scheduleSave(c.id, () => positionMutation.mutate({ id: c.id, x: Math.round(x), y: Math.round(y) }));
+          scheduleSave(c.id, () => savePosition({ id: c.id, x: Math.round(x), y: Math.round(y) }));
         }
         if (c.type === "dimensions" && c.resizing === false && c.dimensions) {
           const { width, height } = c.dimensions;
           scheduleSave(c.id, () =>
-            sizeMutation.mutate({ id: c.id, width: Math.round(width), height: Math.round(height) }),
+            saveSize({ id: c.id, width: Math.round(width), height: Math.round(height) }),
           );
         }
       }
     },
-    [onNodesChangeInternal, scheduleSave, positionMutation, sizeMutation],
+    [onNodesChangeInternal, scheduleSave, savePosition, saveSize],
   );
 
-  return { nodes, setNodes, onNodesChange, saveFailed };
+  return { nodes, setNodes, onNodesChange };
 }

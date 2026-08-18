@@ -47,8 +47,15 @@ export async function getTodayMessages(): Promise<TodayMailResult> {
     const messages = await fetchTodaysMessages(accessToken);
     return { messages };
   } catch (err) {
-    console.error("Gmail fetch failed", err);
     const isExpired = err instanceof Error && err.message.includes("401");
+    if (isExpired) {
+      // Expected, user-actionable state (revoked access, or a refresh token
+      // that no longer works) — not a server fault. Logged without the stack so
+      // it stops surfacing as a Console Error on every workspace render.
+      console.info("Gmail needs reconnecting for this account (401).");
+    } else {
+      console.error("Gmail fetch failed", err);
+    }
     return {
       error: isExpired
         ? "Gmail session expired. Please reconnect your account under Settings."

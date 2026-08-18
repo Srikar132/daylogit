@@ -2,12 +2,28 @@
 
 import { headers } from "next/headers";
 import { z } from "zod";
+import { and, eq, ilike, inArray, ne, notExists, or, sql } from "drizzle-orm";
 import { APIError } from "better-auth/api";
 import { auth } from "@/lib/better-auth";
+import { db } from "@/lib/db";
+import { invitation, member, user } from "@/lib/auth-schema";
+import { alias } from "drizzle-orm/pg-core";
 import { requireViewerContext } from "@/lib/workspace";
 import { canDeleteWorkspace, canManageWorkspace, mapAccessLevelToOrgRole, ACCESS_LEVELS } from "@/lib/permissions";
+import { containsPattern } from "@/lib/utils";
 
 export type MemberActionState = { error?: string };
+export type InviteSuggestion = { email: string; name: string | null };
+
+/** Below this a suggestion list is noise, and a one-character prefix search is
+ *  closer to "list everyone" than to autocomplete. */
+const MIN_SUGGESTION_QUERY_LENGTH = 2;
+const SUGGESTION_LIMIT = 5;
+
+/** `member` appears twice in the suggestion query — once to find people the
+ *  viewer shares any workspace with, once to exclude those already in THIS one —
+ *  so the second reference needs its own alias. */
+const memberAlias = alias(member, "existing_member");
 
 const inviteSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email."),
@@ -169,3 +185,78 @@ export async function removeMemberAction(
 
   return {};
 }
+
+const suggestSchema = z.object({ query: z.string().trim().max(120) });
+
+/**
+ * Email suggestions for the invite field.
+ *
+ * Scoped to people the viewer ALREADY shares a workspace with — deliberately
+ * not a search over the whole `user` table. A global prefix search would let
+ * any signed-in account enumerate every email address in the database one
+ * keystroke at a time, which is a data leak dressed up as autocomplete. Anyone
+ * outside that circle can still be invited by typing their address in full;
+ * they just aren't suggested.
+ *
+ * Already-members and already-invited addresses are filtered out, since
+ * inviting them again only produces an error.
+ */
+export async function suggestInviteEmailsAction(
+  query: string,
+): Promise<{ suggestions: InviteSuggestion[]; error?: string }> {
+  const parsed = suggestSchema.safeParse({ query });
+  if (!parsed.success) return { suggestions: [] };
+
+  const viewer = await requireViewerContext();
+  if (!canManageWorkspace(viewer.role)) return { suggestions: [] };
+
+  const needle = parsed.data.query.trim();
+  if (needle.length < MIN_SUGGESTION_QUERY_LENGTH) return { suggestions: [] };
+
+  const pattern = containsPattern(needle);
+  // Workspaces the viewer belongs to — the boundary of who may be suggested. A
+  // correlated subquery rather than a separate round trip, so the whole thing
+  // stays one statement.
+  const viewerOrgs = db
+    .select({ organizationId: member.organizationId })
+    .from(member)
+    .where(eq(member.userId, viewer.userId));
+
+  const alreadyMember = db
+    .select({ one: sql`1` })
+    .from(memberAlias)
+    .where(and(eq(memberAlias.organizationId, viewer.organizationId), eq(memberAlias.userId, user.id)));
+
+  const alreadyInvited = db
+    .select({ one: sql`1` })
+    .from(invitation)
+    .where(
+      and(
+        eq(invitation.organizationId, viewer.organizationId),
+        eq(invitation.status, "pending"),
+        sql`lower(${invitation.email}) = lower(${user.email})`,
+      ),
+    );
+
+  // Matching, exclusion and the row cap all happen in SQL. Doing any of it in
+  // JavaScript meant loading every user in every workspace the viewer belongs to
+  // on each keystroke, which is fine for a handful of people and pointless work
+  // for a real team.
+  const rows = await db
+    .selectDistinct({ email: user.email, name: user.name })
+    .from(member)
+    .innerJoin(user, eq(member.userId, user.id))
+    .where(
+      and(
+        inArray(member.organizationId, viewerOrgs),
+        ne(user.id, viewer.userId),
+        or(ilike(user.email, pattern), ilike(user.name, pattern)),
+        notExists(alreadyMember),
+        notExists(alreadyInvited),
+      ),
+    )
+    .limit(SUGGESTION_LIMIT);
+
+  return { suggestions: rows };
+}
+

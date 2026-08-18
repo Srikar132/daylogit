@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/better-auth";
+import { canWriteWidgets } from "@/lib/permissions";
 import { WorkspaceDashboard } from "@/components/workspace-dashboard";
 import { getBoardData } from "@/lib/worklog";
 import { requireViewerContext } from "@/lib/workspace";
@@ -8,7 +9,6 @@ import { getMyWidgetLayout } from "@/lib/actions/widgets";
 import { getDocProjectsByIds } from "@/lib/actions/docs";
 import { getAlbumPreviewsByIds } from "@/lib/actions/albums";
 import { getGmailStatus, getTodayMessages } from "@/lib/actions/gmail";
-import { getWorkspaceMembersData } from "@/lib/actions/members";
 
 export const dynamic = "force-dynamic";
 
@@ -62,11 +62,10 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     .map((item) => (item.data as { albumId?: unknown } | undefined)?.albumId)
     .filter((id): id is string => typeof id === "string");
 
-  const [initialProjectSummaries, initialAlbumPreviews, initialGmailStatus, initialWorkspaceMembers] = await Promise.all([
+  const [initialProjectSummaries, initialAlbumPreviews, initialGmailStatus] = await Promise.all([
     getDocProjectsByIds(projectDocIds),
     getAlbumPreviewsByIds(albumIds),
     getGmailStatus(),
-    getWorkspaceMembersData(),
   ]);
 
   // Only known once we have the status above, so this can't join wave 2.
@@ -78,13 +77,12 @@ export default async function WorkspacePage({ params }: WorkspacePageProps) {
     <WorkspaceDashboard
       slug={slug}
       columns={columns}
-      canWrite={viewer.role !== "member"}
+      canWrite={canWriteWidgets(viewer.role)}
       initialLayout={initialLayout}
       initialProjectSummaries={initialProjectSummaries}
       initialAlbumPreviews={initialAlbumPreviews}
       initialGmailStatus={initialGmailStatus}
       initialGmailMessages={initialGmailMessages}
-      initialWorkspaceMembers={initialWorkspaceMembers}
     />
   );
 }

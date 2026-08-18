@@ -28,6 +28,7 @@ import {
   type DocProjectSummary,
 } from "@/lib/actions/docs";
 import { unwrapAction } from "@/lib/query-utils";
+import { toPlainJson } from "@/lib/utils";
 
 interface DocsProjectViewProps {
   /** Omitted for the public share view — there's no workspace to go back
@@ -140,13 +141,22 @@ export function DocsProjectView({ slug, project, initialPages, canWrite }: DocsP
   });
 
   function handlePageContentChange(pageId: string, json: Record<string, unknown>) {
-    setPages((prev) => prev.map((p) => (p.id === pageId ? { ...p, content: json } : p)));
-    savePageMutation.mutate({ pageId, patch: { content: json } });
+    // The server is the authority (updateDocPage rejects with "View-only
+    // access."), but a viewer should never generate the request in the first
+    // place — it only produces console errors for something they didn't do.
+    if (!canWrite) return;
+    // Same null-prototype problem as the canvas note: ProseMirror mark attrs
+    // don't survive the server-action boundary unless rebuilt as plain JSON, so
+    // a doc page's text colour would vanish on save too (lib/plain-json.ts).
+    const plain = toPlainJson(json);
+    setPages((prev) => prev.map((p) => (p.id === pageId ? { ...p, content: plain } : p)));
+    savePageMutation.mutate({ pageId, patch: { content: plain } });
   }
 
   const titleSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   function handlePageTitleChange(pageId: string, title: string) {
+    if (!canWrite) return;
     setPages((prev) => prev.map((p) => (p.id === pageId ? { ...p, title } : p)));
     const timers = titleSaveTimers.current;
     const existing = timers.get(pageId);

@@ -8,7 +8,6 @@ import type { DocProjectSummary } from "@/lib/actions/docs";
 import type { AlbumPreview } from "@/lib/actions/albums";
 import type { GmailStatus } from "@/lib/actions/gmail";
 import type { GmailMessageSummary } from "@/lib/gmail";
-import type { WorkspaceMembersData } from "@/components/canvas/workspace-settings-widget";
 
 // react-flow + dnd-kit + every widget component (Tiptap included, via
 // widget-node.tsx's static imports) all hang off this one import — code-
@@ -29,7 +28,6 @@ interface WorkspaceDashboardProps {
   initialAlbumPreviews: Record<string, AlbumPreview>;
   initialGmailStatus: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
-  initialWorkspaceMembers?: WorkspaceMembersData;
 }
 
 // The QueryClient itself lives at the root layout (app/providers.tsx) —
@@ -47,7 +45,6 @@ export function WorkspaceDashboard({
   initialAlbumPreviews,
   initialGmailStatus,
   initialGmailMessages,
-  initialWorkspaceMembers,
 }: WorkspaceDashboardProps) {
   return (
     <div className="relative h-dvh w-dvw overflow-hidden bg-[#1e1f20] text-[#e8eaed] font-sans">
@@ -60,7 +57,6 @@ export function WorkspaceDashboard({
         initialAlbumPreviews={initialAlbumPreviews}
         initialGmailStatus={initialGmailStatus}
         initialGmailMessages={initialGmailMessages}
-        initialWorkspaceMembers={initialWorkspaceMembers}
       />
       <CanvasChrome />
     </div>

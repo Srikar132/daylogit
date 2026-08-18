@@ -330,6 +330,22 @@
   cursor: default;
 }
 
+/* xyflow sets `user-select: none` on EVERY .react-flow__node (its style.css,
+   the rule that keeps a node drag from selecting label text). That inherits
+   into anything we render inside a node — and a `user-select: none` ancestor
+   makes a browser drop click-to-place-caret and drag-to-select inside a
+   contenteditable: `contenteditable` does not re-enable selection on its own.
+   Any editable surface inside a widget has to opt itself back in, or the
+   caret can only ever be moved programmatically. */
+.react-flow__node .ProseMirror,
+.react-flow__node [contenteditable="true"],
+.react-flow__node input,
+.react-flow__node textarea {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+}
+
 /* xyflow themes itself via these CSS vars (see @xyflow/react/dist/style.css) —
    set them once here instead of hand-overriding each subcomponent, so every
    xyflow-rendered piece (controls, minimap, selection box, resize handles,

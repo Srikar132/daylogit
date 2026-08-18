@@ -43,3 +43,6 @@ next-env.d.ts
 
 .vercel
 .env*
+/public/monaco
+/docker/judge0/judge0.conf
+docker/judge0/*.log

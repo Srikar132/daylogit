@@ -2,13 +2,16 @@ import type { Node } from "@xyflow/react";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useRef } from "react";
 import { AUTO_HEIGHT_MIN, NEW_WIDGET_DEFAULTS, buildNode, type WidgetNodeContext } from "@/components/canvas/widget-registry";
+import { WIDGET_SAVE_RETRY, type SaveStatus } from "@/components/canvas/hooks/use-save-status";
 import { createWidgetAction, deleteWidgetAction, updateWidgetDataAction, updateWidgetSizeAction } from "@/lib/actions/widgets";
 import { unwrapAction } from "@/lib/query-utils";
+import { toPlainJson } from "@/lib/utils";
 import type { WidgetLayoutItem } from "@/lib/db";
 
 interface UseWidgetActionsArgs {
   ctx: WidgetNodeContext;
   setNodes: (updater: (current: Node[]) => Node[]) => void;
+  saveStatus: SaveStatus;
 }
 
 /**
@@ -17,32 +20,59 @@ interface UseWidgetActionsArgs {
  * drag and paste hooks to actually create new nodes. Each call here writes
  * exactly the one widget row it touches — no shared array to rewrite.
  */
-export function useWidgetActions({ ctx, setNodes }: UseWidgetActionsArgs) {
-  const updateDataMutation = useMutation({
+export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActionsArgs) {
+  const { reportSaveFailed, reportSaveSucceeded } = saveStatus;
+
+// Only `mutate` is destructured, deliberately: useMutation returns a NEW result
+// object on every render, so a callback listing the whole mutation in its deps
+// changed identity every render. That is invisible until such a callback lands in
+// an effect's dependency array, where it produces an endless
+// effect -> setState -> render -> effect loop. `mutate` is referentially stable,
+// and naming it here keeps exhaustive-deps satisfied without reintroducing that.
+  // A widget's data IS the user's work (a note's text, a bookmark's url), so
+  // this gets the same retry-then-admit-it treatment as position/size rather
+  // than failing to console only.
+  const { mutate: saveWidgetData } = useMutation({
+    ...WIDGET_SAVE_RETRY,
     mutationFn: (input: { id: string; widgetData: Record<string, unknown> }) =>
       unwrapAction(updateWidgetDataAction(input.id, input.widgetData)),
-    onError: (err) => console.error("Failed to save widget data:", err),
+    onError: (err) => {
+      console.error("Failed to save widget data:", err);
+      reportSaveFailed();
+    },
+    onSuccess: reportSaveSucceeded,
   });
 
   const updateWidgetData = useCallback(
     (id: string, widgetData: Record<string, unknown>) => {
-      setNodes((current) => current.map((n) => (n.id === id ? { ...n, data: { ...n.data, widgetData } } : n)));
-      updateDataMutation.mutate({ id, widgetData });
+      // Rebuilt as plain JSON before it crosses the server-action boundary:
+      // ProseMirror's mark `attrs` are null-prototype objects, which React Flight
+      // cannot serialize, so a note's text colour was silently dropped in transit
+      // while attribute-less marks like bold came through fine. See
+      // lib/plain-json.ts.
+      const plain = toPlainJson(widgetData);
+      setNodes((current) => current.map((n) => (n.id === id ? { ...n, data: { ...n.data, widgetData: plain } } : n)));
+      saveWidgetData({ id, widgetData: plain });
     },
-    [setNodes, updateDataMutation],
+    [setNodes, saveWidgetData],
   );
 
-  const resizeMutation = useMutation({
+  const { mutate: saveWidgetSize } = useMutation({
+    ...WIDGET_SAVE_RETRY,
     mutationFn: (input: { id: string; width: number; height: number }) => unwrapAction(updateWidgetSizeAction(input)),
-    onError: (err) => console.error("Failed to save widget size:", err),
+    onError: (err) => {
+      console.error("Failed to save widget size:", err);
+      reportSaveFailed();
+    },
+    onSuccess: reportSaveSucceeded,
   });
 
   const resizeWidget = useCallback(
     (id: string, size: { width: number; height: number }) => {
       setNodes((current) => current.map((n) => (n.id === id ? { ...n, width: size.width, height: size.height } : n)));
-      resizeMutation.mutate({ id, ...size });
+      saveWidgetSize({ id, ...size });
     },
-    [setNodes, resizeMutation],
+    [setNodes, saveWidgetSize],
   );
 
   // Ephemeral interaction state, not persisted — WidgetNode drives this
@@ -78,7 +108,7 @@ export function useWidgetActions({ ctx, setNodes }: UseWidgetActionsArgs) {
     pendingFiles.current.delete(id);
   }, []);
 
-  const deleteMutation = useMutation({
+  const { mutate: deleteWidgetRow } = useMutation({
     mutationFn: (id: string) => unwrapAction(deleteWidgetAction(id)),
     onError: (err) => console.error("Failed to delete widget:", err),
   });
@@ -87,15 +117,18 @@ export function useWidgetActions({ ctx, setNodes }: UseWidgetActionsArgs) {
     (id: string) => {
       pendingFiles.current.delete(id);
       setNodes((current) => current.filter((n) => n.id !== id));
-      deleteMutation.mutate(id);
+      deleteWidgetRow(id);
     },
-    [setNodes, deleteMutation],
+    [setNodes, deleteWidgetRow],
   );
 
-  const createMutation = useMutation({
+  const { mutate: createWidgetRow } = useMutation({
+    ...WIDGET_SAVE_RETRY,
     mutationFn: (item: WidgetLayoutItem) => unwrapAction(createWidgetAction(item)),
+    onSuccess: reportSaveSucceeded,
     onError: (err, item) => {
       console.error("Failed to create widget:", err);
+      reportSaveFailed();
       // The optimistic node never made it to the server — pull it back out
       // rather than leaving a widget on the canvas that doesn't exist in
       // the DB and will vanish on next reload with no explanation.
@@ -119,10 +152,10 @@ export function useWidgetActions({ ctx, setNodes }: UseWidgetActionsArgs) {
         height: defaults.height,
       };
       setNodes((current) => [...current, buildNode(item, ctx)]);
-      createMutation.mutate(item);
+      createWidgetRow(item);
       return item.id;
     },
-    [ctx, setNodes, createMutation],
+    [ctx, setNodes, createWidgetRow],
   );
 
   // A pasted/dropped file becomes its own widget immediately (status:

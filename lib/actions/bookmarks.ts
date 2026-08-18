@@ -5,15 +5,9 @@ import net from "node:net";
 import { z } from "zod";
 import ogs from "open-graph-scraper";
 import { requireViewerContext } from "@/lib/workspace";
+import { resolveBookmarkPreview, type BookmarkPreview } from "@/lib/bookmark-metadata";
 
-export type BookmarkData = {
-  url: string;
-  title: string;
-  description?: string;
-  image?: string;
-  siteName?: string;
-  favicon?: string;
-};
+export type BookmarkData = BookmarkPreview;
 
 function isPrivateIPv4(ip: string): boolean {
   const parts = ip.split(".").map(Number);
@@ -83,14 +77,10 @@ export async function getBookmarkMetadata(rawUrl: string): Promise<{ data?: Book
   const ogsResult = await ogs({ url: url.toString(), timeout: 8 }).catch(() => null);
   const result = ogsResult && !ogsResult.error ? ogsResult.result : null;
 
-  return {
-    data: {
-      url: url.toString(),
-      title: result?.ogTitle || url.hostname,
-      description: result?.ogDescription,
-      image: result?.ogImage?.[0]?.url,
-      siteName: result?.ogSiteName,
-      favicon: result?.favicon,
-    },
-  };
+  // Every url in the scraped result is resolved against the page it came from
+  // and the fields fall back step by step — see lib/bookmark-metadata.ts. Doing
+  // that here rather than inline is what fixed bookmarks showing THIS app's
+  // favicon: pages declare icons relatively, and an unresolved "/favicon.ico"
+  // resolves against whatever origin renders it.
+  return { data: resolveBookmarkPreview(url.toString(), result) };
 }

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ListFilter, Search } from "lucide-react";
 import { useRef, useState } from "react";
 import { EntryBoard } from "@/components/board/entry-board";
+import { boardKey } from "@/lib/query-keys";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -14,6 +15,9 @@ import { WORK_TYPES, type WorkType } from "@/lib/constants";
 import type { BoardColumn } from "@/lib/worklog";
 
 interface BoardWidgetProps {
+  /** Scopes this board's cache to its workspace — without it every workspace
+   *  shared one ["board", …] entry (see lib/query-keys.ts). */
+  slug: string;
   columns: BoardColumn[];
   canWrite: boolean;
 }
@@ -29,7 +33,7 @@ async function fetchBoard(search: string, workTypes: WorkType[]): Promise<{ colu
   return res.json();
 }
 
-export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetProps) {
+export function BoardWidget({ slug, columns: initialColumns, canWrite }: BoardWidgetProps) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   // Debounced separately from `search` (which drives the input directly) —
@@ -44,7 +48,7 @@ export function BoardWidget({ columns: initialColumns, canWrite }: BoardWidgetPr
   const [openEntryId, setOpenEntryId] = useState<string | null>(null);
 
   const isInitialQuery = !debouncedSearch.trim() && workTypeFilter.length === 0;
-  const queryKey = ["board", debouncedSearch, workTypeFilter];
+  const queryKey = boardKey(slug, debouncedSearch, workTypeFilter.join(","));
 
   const { data, isFetching, dataUpdatedAt } = useQuery({
     queryKey,
