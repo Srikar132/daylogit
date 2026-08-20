@@ -26,6 +26,7 @@ export function DrawCanvasOverlay() {
   const isDrawingRef = useRef(false);
   const isPanningRef = useRef(false);
   const lastPanPosRef = useRef<{ x: number; y: number } | null>(null);
+  const touchStartRef = useRef<{ dist: number; center: { x: number; y: number } } | null>(null);
   const activePointsRef = useRef<Point[]>([]);
   const laserCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -82,6 +83,52 @@ export function DrawCanvasOverlay() {
     } else {
       // Pan canvas up/down/left/right seamlessly while drawing
       setViewport({ x: x - e.deltaX, y: y - e.deltaY, zoom });
+    }
+  }
+
+  // 2-Finger Touch Gestures for Mobile Panning & Pinch-Zoom
+  function handleTouchStart(e: React.TouchEvent<HTMLDivElement>) {
+    if (e.touches.length === 2) {
+      // Cancel active 1-finger drawing when 2 fingers touch mobile screen
+      isDrawingRef.current = false;
+      activePointsRef.current = [];
+      setActivePoints([]);
+
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const center = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+      touchStartRef.current = { dist, center };
+    }
+  }
+
+  function handleTouchMove(e: React.TouchEvent<HTMLDivElement>) {
+    if (e.touches.length === 2 && touchStartRef.current) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const center = { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+
+      const dx = center.x - touchStartRef.current.center.x;
+      const dy = center.y - touchStartRef.current.center.y;
+      const scale = dist / (touchStartRef.current.dist || 1);
+
+      const { x, y, zoom } = getViewport();
+      const newZoom = Math.min(1.5, Math.max(0.3, zoom * scale));
+
+      setViewport({
+        x: x + dx,
+        y: y + dy,
+        zoom: newZoom,
+      });
+
+      touchStartRef.current = { dist, center };
+    }
+  }
+
+  function handleTouchEnd(e: React.TouchEvent<HTMLDivElement>) {
+    if (e.touches.length < 2) {
+      touchStartRef.current = null;
     }
   }
 
@@ -332,15 +379,19 @@ export function DrawCanvasOverlay() {
 
   return (
     <>
-      {/* Interactive Overlay for Gestures */}
+      {/* Interactive Overlay for Gestures & Touch Navigation */}
       {isActiveMode && (
         <div
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
           onWheel={handleWheel}
-          className={`absolute inset-0 z-10 touch-none ${cursorClass}`}
+          style={{ touchAction: "none" }}
+          className={`absolute inset-0 z-10 ${cursorClass}`}
         >
           {/* Laser Pointer Canvas (Screen Coordinates) */}
           {mode === "laser" && (
