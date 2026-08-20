@@ -237,7 +237,6 @@ function CanvasInner({
             // instead of fighting the fetching work already done.
             onlyRenderVisibleElements
           >
-            <Controls className="hidden" showInteractive={false} />
             {/* Fixed-pixel minimap eats too much of a phone screen to be
                 worth the nav benefit there — hidden below md, same call
                 Miro/tldraw make on mobile. */}
