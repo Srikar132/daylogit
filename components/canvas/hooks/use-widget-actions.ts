@@ -137,12 +137,12 @@ export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActions
   });
 
   const addWidget = useCallback(
-    (type: string, dropPoint?: { x: number; y: number }) => {
+    (type: string, dropPoint?: { x: number; y: number }, initialData?: Record<string, unknown>) => {
       const defaults = NEW_WIDGET_DEFAULTS[type] ?? { width: 340, height: 320 };
       // dropPoint is the toolbar drag's release point (canvas coords) — the
       // widget centers there instead of anchoring its top-left corner to it.
-      const x = dropPoint ? dropPoint.x - defaults.width / 2 : 60;
-      const y = dropPoint ? dropPoint.y - (defaults.height ?? AUTO_HEIGHT_MIN[type] ?? 160) / 2 : 340;
+      const x = type === "draw" ? 0 : dropPoint ? dropPoint.x - defaults.width / 2 : 60;
+      const y = type === "draw" ? 0 : dropPoint ? dropPoint.y - (defaults.height ?? AUTO_HEIGHT_MIN[type] ?? 160) / 2 : 340;
       const item: WidgetLayoutItem = {
         id: `${type}-${crypto.randomUUID()}`,
         type,
@@ -150,6 +150,7 @@ export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActions
         y: Math.round(y),
         width: defaults.width,
         height: defaults.height,
+        data: initialData,
       };
       setNodes((current) => [...current, buildNode(item, ctx)]);
       createWidgetRow(item);

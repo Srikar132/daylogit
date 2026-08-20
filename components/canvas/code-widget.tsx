@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Code2, ExternalLink, Sparkles, Trash2 } from "lucide-react";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
+import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -93,14 +94,16 @@ export function CodeWidget({ id, slug, canWrite, widgetData }: CodeWidgetProps) 
 
         <div className="mt-auto flex items-center justify-between gap-2 pt-0.5">
           <span className="text-[11.5px] text-widget-text-muted">{language?.label ?? data.languageId}</span>
-          <button
+          <Button
             type="button"
+            variant="default"
+            size="xs"
             onClick={openEditor}
-            className="nodrag widget-btn-primary flex items-center gap-1.5 px-3 py-1.5 text-[12px] cursor-pointer"
+            className="nodrag cursor-pointer"
+            badgeIcon={<ExternalLink className="h-3 w-3" />}
           >
-            <ExternalLink className="h-3.5 w-3.5" />
             Open editor
-          </button>
+          </Button>
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>

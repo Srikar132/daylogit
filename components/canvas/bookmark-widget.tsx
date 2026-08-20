@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { AlertCircle, Bookmark, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -154,22 +155,25 @@ function DraftBookmarkForm({ id, canWrite }: { id: string; canWrite: boolean }) 
 
       <div className="mt-auto flex items-center justify-end gap-2 pt-1">
         {canWrite && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => deleteWidget(id)}
-            className="rounded-full px-3 py-1.5 text-[12px] text-widget-text-secondary hover:bg-white/5 hover:text-widget-text-primary cursor-pointer"
+            className="text-widget-text-secondary hover:text-widget-text-primary"
           >
             Cancel
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="submit"
+          variant="default"
+          size="sm"
           disabled={fetchMutation.isPending}
-          className="widget-btn-primary flex items-center gap-1.5 px-4 py-1.5 text-[12px] disabled:opacity-60 cursor-pointer"
         >
           {fetchMutation.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
           {fetchMutation.isPending ? "Fetching…" : "Save"}
-        </button>
+        </Button>
       </div>
     </form>
   );

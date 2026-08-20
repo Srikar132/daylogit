@@ -3,14 +3,16 @@
 import "@xyflow/react/dist/style.css";
 import { ReactFlow, ReactFlowProvider, Controls, MiniMap, useReactFlow } from "@xyflow/react";
 import { DndContext, DragOverlay } from "@dnd-kit/core";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { WidgetNode } from "@/components/canvas/widget-node";
+import { WidgetNode, type WidgetNodeData } from "@/components/canvas/widget-node";
 import { WidgetToolbar, ToolbarDragGhost } from "@/components/canvas/widget-toolbar";
 import { CanvasModeToolbar } from "@/components/canvas/canvas-mode-toolbar";
 import { CanvasModeProvider } from "@/components/canvas/canvas-mode-context";
 import { CanvasActionsProvider } from "@/components/canvas/canvas-actions-context";
+import { DrawCanvasOverlay } from "@/components/canvas/draw-canvas-overlay";
 import { CANVAS_CLASS_BY_MODE, FLOW_PROPS_BY_MODE, type CanvasMode } from "@/lib/canvas/widget-interaction";
+import type { DrawTool, Stroke } from "@/lib/canvas/stroke-utils";
 import { useWidgetLayout } from "@/components/canvas/hooks/use-widget-layout";
 import { useWidgetActions } from "@/components/canvas/hooks/use-widget-actions";
 import { useSaveStatus } from "@/components/canvas/hooks/use-save-status";
@@ -87,6 +89,10 @@ function CanvasInner({
   // Grab is the default — opening a canvas starts by looking around it, and a
   // stray first drag pans instead of marquee-selecting or nudging a widget.
   const [mode, setMode] = useState<CanvasMode>("grab");
+  const [activeTool, setActiveTool] = useState<DrawTool | "laser">("pen");
+  const [strokeColor, setStrokeColor] = useState("#f7ce15");
+  const [strokeWidth, setStrokeWidth] = useState(6);
+
   const flowProps = FLOW_PROPS_BY_MODE[mode];
 
   const { screenToFlowPosition } = useReactFlow();
@@ -111,18 +117,101 @@ function CanvasInner({
     screenToFlowPosition,
   });
 
+  const widgetSummaries = useMemo(
+    () =>
+      nodes.map((n) => ({
+        id: n.id,
+        type: (n.data as unknown as WidgetNodeData).widgetType,
+        data: (n.data as unknown as WidgetNodeData).widgetData,
+      })),
+    [nodes],
+  );
+
+  const [historyStack, setHistoryStack] = useState<Stroke[][]>([]);
+  const [redoStack, setRedoStack] = useState<Stroke[][]>([]);
+
+  const drawWidgetSummary = useMemo(
+    () => widgetSummaries.find((w) => w.type === "draw"),
+    [widgetSummaries],
+  );
+
+  const currentStrokes = useMemo(
+    () => (drawWidgetSummary?.data?.strokes as Stroke[]) ?? [],
+    [drawWidgetSummary],
+  );
+
+  const pushDrawHistory = useCallback((prevStrokes: Stroke[]) => {
+    setHistoryStack((stack) => [...stack, prevStrokes]);
+    setRedoStack([]);
+  }, []);
+
+  const undoDraw = useCallback(() => {
+    if (historyStack.length === 0 || !drawWidgetSummary) return;
+    const previousStrokes = historyStack[historyStack.length - 1];
+    setHistoryStack((stack) => stack.slice(0, -1));
+    setRedoStack((stack) => [...stack, currentStrokes]);
+    updateWidgetData(drawWidgetSummary.id, { strokes: previousStrokes });
+  }, [historyStack, drawWidgetSummary, currentStrokes, updateWidgetData]);
+
+  const redoDraw = useCallback(() => {
+    if (redoStack.length === 0 || !drawWidgetSummary) return;
+    const nextStrokes = redoStack[redoStack.length - 1];
+    setRedoStack((stack) => stack.slice(0, -1));
+    setHistoryStack((stack) => [...stack, currentStrokes]);
+    updateWidgetData(drawWidgetSummary.id, { strokes: nextStrokes });
+  }, [redoStack, drawWidgetSummary, currentStrokes, updateWidgetData]);
+
+  // Keyboard shortcut listener for Ctrl+Z / Cmd+Z / Ctrl+Y
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (mode !== "draw") return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+      if (isCmdOrCtrl && e.key.toLowerCase() === "z") {
+        if (e.shiftKey) {
+          e.preventDefault();
+          redoDraw();
+        } else {
+          e.preventDefault();
+          undoDraw();
+        }
+      } else if (isCmdOrCtrl && e.key.toLowerCase() === "y") {
+        e.preventDefault();
+        redoDraw();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mode, undoDraw, redoDraw]);
+
   return (
-    // Explicit id — without one, dnd-kit falls back to a module-level
-    // incrementing counter for its aria-describedby ids, and this context
-    // being nested with BoardWidget's own DndContext (data-dependent task
-    // count) shifts that counter differently between the server render
-    // and the client hydration pass, causing a hydration mismatch warning.
     <DndContext id="canvas-widget-toolbar" sensors={dndSensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <CanvasModeProvider value={{ mode, setMode }}>
+      <CanvasModeProvider
+        value={{
+          mode,
+          setMode,
+          activeTool,
+          setActiveTool,
+          strokeColor,
+          setStrokeColor,
+          strokeWidth,
+          setStrokeWidth,
+          canUndo: historyStack.length > 0,
+          canRedo: redoStack.length > 0,
+          undoDraw,
+          redoDraw,
+        }}
+      >
       <CanvasActionsProvider
         value={{
+          widgets: widgetSummaries,
+          addWidget,
           updateWidgetData,
           deleteWidget,
+          pushDrawHistory,
           getPendingFile,
           clearPendingFile,
           resizeWidget,
@@ -130,7 +219,7 @@ function CanvasInner({
           setWidgetSelected,
         }}
       >
-        <div className="h-full w-full" onDragOver={handleDragOverCanvas} onDrop={handleDropOnCanvas}>
+        <div className="relative h-full w-full" onDragOver={handleDragOverCanvas} onDrop={handleDropOnCanvas}>
           <ReactFlow
             nodes={nodes}
             onNodesChange={onNodesChange}
@@ -154,6 +243,7 @@ function CanvasInner({
                 Miro/tldraw make on mobile. */}
             <MiniMap className="hidden !rounded-xl !border !border-white/[0.06] md:block" />
           </ReactFlow>
+          <DrawCanvasOverlay />
         </div>
       </CanvasActionsProvider>
 

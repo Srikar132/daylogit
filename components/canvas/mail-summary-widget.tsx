@@ -18,6 +18,7 @@ import {
   type GmailStatus,
 } from "@/lib/actions/gmail";
 import { GMAIL_READONLY_SCOPE, type GmailMessageSummary } from "@/lib/gmail";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MailReaderOverlay } from "@/components/canvas/mail-reader-overlay";
 import { GmailIcon } from "@/components/icons/gmail-icon";
@@ -169,15 +170,16 @@ export function MailSummaryWidget({ initialStatus, initialMessages }: MailSummar
                 Read and manage today&apos;s workspace emails.
               </p>
             </div>
-            <button
+            <Button
               type="button"
+              variant="default"
+              size="sm"
               onClick={handleConnect}
               disabled={isConnecting}
-              className="widget-btn-primary flex items-center gap-1.5 px-3.5 py-1.5 text-[12px] disabled:opacity-50 cursor-pointer"
+              badgeIcon={isConnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
             >
-              {isConnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
               Connect
-            </button>
+            </Button>
           </div>
         )}
 
@@ -195,15 +197,16 @@ export function MailSummaryWidget({ initialStatus, initialMessages }: MailSummar
             </p>
             {/* Reconnecting re-runs the same Google link flow as first-time
                 setup, which is what a revoked or expired grant needs. */}
-            <button
+            <Button
               type="button"
+              variant="default"
+              size="sm"
               onClick={handleConnect}
               disabled={isConnecting}
-              className="widget-btn-primary flex items-center gap-1.5 px-3.5 py-1.5 text-[12px] disabled:opacity-50 cursor-pointer"
+              badgeIcon={isConnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
             >
-              {isConnecting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
               Reconnect Gmail
-            </button>
+            </Button>
           </div>
         )}
 

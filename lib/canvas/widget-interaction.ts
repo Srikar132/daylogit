@@ -20,7 +20,7 @@
  * same way — double-click to enter text, click outside to leave.
  */
 
-export type CanvasMode = "grab" | "select";
+export type CanvasMode = "grab" | "select" | "draw" | "laser";
 export type WidgetPhase = "idle" | "selected" | "editing";
 
 export type WidgetChrome = {
@@ -40,7 +40,7 @@ export type WidgetChrome = {
   /** Resize controls are mounted. They sit ON TOP of the card, so they must
    *  not be up while the user is aiming a caret at the content underneath. */
   showResizeControls: boolean;
-  cursor: "grab" | "default" | "text";
+  cursor: "grab" | "default" | "text" | "crosshair";
 };
 
 const GRAB_CHROME: WidgetChrome = {
@@ -51,6 +51,16 @@ const GRAB_CHROME: WidgetChrome = {
   textSelectable: false,
   showResizeControls: false,
   cursor: "grab",
+};
+
+const DRAW_CHROME: WidgetChrome = {
+  draggable: false,
+  interactive: false,
+  claimsDrag: false,
+  claimsWheel: true,
+  textSelectable: false,
+  showResizeControls: false,
+  cursor: "crosshair",
 };
 
 /**
@@ -94,6 +104,16 @@ const CHROME: Record<CanvasMode, Record<WidgetPhase, WidgetChrome>> = {
       cursor: "text",
     },
   },
+  draw: {
+    idle: DRAW_CHROME,
+    selected: DRAW_CHROME,
+    editing: DRAW_CHROME,
+  },
+  laser: {
+    idle: DRAW_CHROME,
+    selected: DRAW_CHROME,
+    editing: DRAW_CHROME,
+  },
 };
 
 export function widgetPhase({ selected, editing }: { selected: boolean; editing: boolean }): WidgetPhase {
@@ -124,6 +144,7 @@ const CURSOR_CLASSES: Record<WidgetChrome["cursor"], string> = {
   grab: "cursor-grab active:cursor-grabbing",
   default: "cursor-default",
   text: "cursor-text",
+  crosshair: "cursor-crosshair",
 };
 
 const PHASE_RING_CLASSES: Record<WidgetPhase, string> = {
@@ -149,6 +170,8 @@ export function widgetChromeClassName(chrome: WidgetChrome, phase: WidgetPhase):
 export const CANVAS_CLASS_BY_MODE: Record<CanvasMode, string> = {
   grab: "cursor-grab active:cursor-grabbing",
   select: "",
+  draw: "cursor-crosshair",
+  laser: "cursor-crosshair",
 };
 
 export const FLOW_PROPS_BY_MODE: Record<
@@ -176,6 +199,20 @@ export const FLOW_PROPS_BY_MODE: Record<
     selectionOnDrag: true,
     nodesDraggable: true,
     elementsSelectable: true,
+    panActivationKeyCode: "Space",
+  },
+  draw: {
+    panOnDrag: [1],
+    selectionOnDrag: false,
+    nodesDraggable: false,
+    elementsSelectable: false,
+    panActivationKeyCode: "Space",
+  },
+  laser: {
+    panOnDrag: [1],
+    selectionOnDrag: false,
+    nodesDraggable: false,
+    elementsSelectable: false,
     panActivationKeyCode: "Space",
   },
 };

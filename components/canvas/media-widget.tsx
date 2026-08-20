@@ -3,6 +3,7 @@
 import { AlertCircle, Copy, Download, Link as LinkIcon, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
+import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -147,20 +148,22 @@ export function MediaWidget({ id, data, canWrite }: MediaWidgetProps) {
         <p className="text-[12px] text-destructive">{media.message}</p>
         {canWrite && (
           <div className="flex gap-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="xs"
               onClick={retry}
-              className="rounded-full bg-white/[0.06] px-3 py-1 text-[11.5px] text-widget-text-primary hover:bg-white/10 cursor-pointer"
             >
               Retry
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="destructive"
+              size="xs"
               onClick={() => deleteWidget(id)}
-              className="rounded-full bg-destructive/10 px-3 py-1 text-[11.5px] text-destructive hover:bg-destructive/20 cursor-pointer"
             >
               Remove
-            </button>
+            </Button>
           </div>
         )}
       </div>

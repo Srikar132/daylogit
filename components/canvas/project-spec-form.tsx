@@ -2,6 +2,7 @@
 
 import { AlertCircle, Plus, Terminal } from "lucide-react";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { DocProjectSummary } from "@/lib/actions/docs";
@@ -159,21 +160,24 @@ export function ProjectSpecForm({
       </div>
 
       <div className="relative z-10 flex items-center justify-end gap-2 pt-3">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="sm"
           onClick={onCancel}
-          className="rounded-full px-3.5 py-1.5 text-[12px] font-medium text-widget-text-secondary hover:bg-white/[0.06] hover:text-widget-text-primary transition-colors cursor-pointer"
+          className="text-widget-text-secondary hover:text-widget-text-primary"
         >
           {cancelLabel}
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
+          variant="default"
+          size="sm"
           disabled={isPending}
-          className="widget-btn-primary inline-flex items-center gap-1.5 px-4 py-1.5 text-[12px] disabled:opacity-60 cursor-pointer"
+          badgeIcon={<Plus className="h-3.5 w-3.5" />}
         >
-          <Plus className="h-3.5 w-3.5" />
           {isPending ? pendingLabel : submitLabel}
-        </button>
+        </Button>
       </div>
     </form>
   );

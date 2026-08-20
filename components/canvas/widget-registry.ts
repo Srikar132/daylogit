@@ -13,25 +13,19 @@ import type { GmailMessageSummary } from "@/lib/gmail";
  * canvas-shell.tsx's component body.
  */
 
-export const MULTI_INSTANCE_WIDGET_TYPES = new Set(["bookmark", "code", "gallery", "markdown", "media", "project-doc"]);
+export const MULTI_INSTANCE_WIDGET_TYPES = new Set(["bookmark", "code", "draw", "gallery", "markdown", "media", "project-doc"]);
 export const KNOWN_WIDGET_TYPES = new Set([
   "board",
   "bookmark",
   "code",
+  "draw",
   "gallery",
   "mail-summary",
   "markdown",
   "media",
   "project-doc",
 ]);
-// Bookmark is a compact, fixed-format row (icon + text) — its height should
-// always hug its own content, never be dragged to an arbitrary size (the
-// reference design has no resize handles on it at all).
-// Code is here for the same reason as bookmark: the card is a compact fixed
-// format (title + language + one line of source) and the editing surface is a
-// separate browser window, so there is nothing on the canvas that benefits from
-// being dragged larger.
-export const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary", "bookmark", "code", "gallery"]);
+export const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary", "bookmark", "code", "draw", "gallery"]);
 
 // Floor for widget types that auto-size to content (no persisted height yet)
 // — without this an almost-empty note would render as a sliver. Height still
@@ -214,7 +208,7 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
   return {
     id: item.id,
     type: "widget",
-    position: { x: item.x, y: item.y },
+    position: item.type === "draw" ? { x: 0, y: 0 } : { x: item.x, y: item.y },
     width: item.width,
     height,
     dragHandle: undefined,
