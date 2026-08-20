@@ -16,15 +16,33 @@ import {
   Underline as UnderlineIcon,
 } from "lucide-react";
 
-const TEXT_COLORS = ["#e8eaed", "#8ab4f8", "#81c995", "#fdd663", "#f28b82", "#c58af9"];
+
+const TEXT_COLORS = [
+  { label: "White", value: "#F8FAFC" },
+  { label: "Blue", value: "#7DD3FC" },
+  { label: "Green", value: "#86EFAC" },
+  { label: "Yellow", value: "#FDE047" },
+  { label: "Rose", value: "#FDA4AF" },
+  { label: "Purple", value: "#D8B4FE" },
+];
+
 const BG_COLORS = [
   { label: "None", value: null },
-  { value: "rgba(138,180,248,0.25)" },
-  { value: "rgba(129,201,149,0.25)" },
-  { value: "rgba(253,214,99,0.25)" },
-  { value: "rgba(242,139,130,0.25)" },
-  { value: "rgba(197,138,249,0.25)" },
-] as { label?: string; value: string | null }[];
+  { value: "rgba(59, 130, 246, 0.45)" },
+  { value: "rgba(16, 185, 129, 0.45)" },
+  { value: "rgba(245, 158, 11, 0.45)" },
+  { value: "rgba(244, 63, 94, 0.45)" },
+  { value: "rgba(139, 92, 246, 0.45)" },
+];
+
+const CARD_COLORS = [
+  { label: "Default", value: undefined },
+  { value: "#2563EB" },
+  { value: "#10B981" },
+  { value: "#F59E0B" },
+  { value: "#8B5CF6" },
+  { value: "#F43F5E" },
+];
 
 const FONT_SIZES = [
   { label: "S", value: "12px" },
@@ -32,15 +50,6 @@ const FONT_SIZES = [
   { label: "L", value: "18px" },
   { label: "XL", value: "24px" },
 ];
-
-const CARD_COLORS = [
-  { label: "Default", value: undefined },
-  { value: "#1a2332" },
-  { value: "#1a2e22" },
-  { value: "#2e2318" },
-  { value: "#241a2e" },
-  { value: "#2e1a1a" },
-] as { label?: string; value: string | undefined }[];
 
 interface NoteToolbarProps {
   editor: Editor;
@@ -118,12 +127,12 @@ export function NoteToolbar({ editor, bgColor, onBgColorChange, onDelete }: Note
       <div className="flex items-center gap-0.5">
         {TEXT_COLORS.map((color) => (
           <button
-            key={color}
+            key={color.value}
             type="button"
-            title="Text color"
-            onClick={() => editor.chain().focus().setColor(color).run()}
+            title={color.label}
+            onClick={() => editor.chain().focus().setColor(color.value).run()}
             className="h-4 w-4 shrink-0 rounded-full ring-1 ring-white/10 cursor-pointer"
-            style={{ backgroundColor: color }}
+            style={{ backgroundColor: color.value }}
           />
         ))}
       </div>
@@ -173,9 +182,8 @@ export function NoteToolbar({ editor, bgColor, onBgColorChange, onDelete }: Note
             type="button"
             title={c.label ?? "Card background"}
             onClick={() => onBgColorChange(c.value)}
-            className={`h-4 w-4 shrink-0 rounded-full ring-1 cursor-pointer ${
-              bgColor === c.value ? "ring-2 ring-white/60" : "ring-white/10"
-            }`}
+            className={`h-4 w-4 shrink-0 rounded-full ring-1 cursor-pointer ${bgColor === c.value ? "ring-2 ring-white/60" : "ring-white/10"
+              }`}
             style={{ backgroundColor: c.value ?? "#131314" }}
           />
         ))}
@@ -208,9 +216,8 @@ function ToolbarButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-md p-1.5 cursor-pointer ${
-        active ? "bg-white/15 text-white" : "text-[#9aa0a6] hover:bg-white/[0.06] hover:text-[#e8eaed]"
-      }`}
+      className={`rounded-md p-1.5 cursor-pointer ${active ? "bg-white/15 text-white" : "text-[#9aa0a6] hover:bg-white/[0.06] hover:text-[#e8eaed]"
+        }`}
     >
       {children}
     </button>
