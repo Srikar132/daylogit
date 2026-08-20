@@ -1,35 +1,21 @@
 "use client";
 
-import { Eraser, Hand, Highlighter, MousePointer2, Pencil, RotateCcw, RotateCw, Sparkles } from "lucide-react";
+import { useReactFlow, useViewport } from "@xyflow/react";
+import {
+  Eraser,
+  Hand,
+  Highlighter,
+  Maximize2,
+  Minus,
+  MousePointer2,
+  Pencil,
+  Plus,
+  RotateCcw,
+  RotateCw,
+  Sparkles,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useCanvasMode } from "@/components/canvas/canvas-mode-context";
-import type { CanvasMode } from "@/lib/canvas/widget-interaction";
-
-const MODES: Array<{
-  mode: CanvasMode;
-  label: string;
-  hint: string;
-  icon: React.ComponentType<{ className?: string }>;
-}> = [
-  {
-    mode: "select",
-    label: "Select",
-    hint: "Select — click a widget to use it, drag the canvas to marquee-select (hold Space to pan)",
-    icon: MousePointer2,
-  },
-  { mode: "grab", label: "Grab", hint: "Grab — drag anywhere to pan the canvas", icon: Hand },
-  {
-    mode: "draw",
-    label: "Draw",
-    hint: "Draw Mode — freehand pen & highlighter annotations saved to workspace",
-    icon: Pencil,
-  },
-  {
-    mode: "laser",
-    label: "Laser Pointer",
-    hint: "Laser Pointer — temporary glowing red ink that disappears 1s after drawing",
-    icon: Sparkles,
-  },
-];
 
 const COLORS = [
   { label: "Yellow", value: "#f7ce15" },
@@ -64,172 +50,225 @@ export function CanvasModeToolbar() {
     redoDraw,
   } = useCanvasMode();
 
-  const showDrawingSubbar = mode === "draw" || mode === "laser";
+  const { zoomIn, zoomOut, fitView, setViewport } = useReactFlow();
+  const viewport = useViewport();
+  const zoomPercentage = Math.round(viewport.zoom * 100);
+
   const showColors = mode === "draw" && activeTool !== "eraser";
 
   return (
-    <div className="pointer-events-none fixed inset-y-4 left-[max(1rem,env(safe-area-inset-left))] z-20 flex items-center gap-2">
-      {/* Primary Mode Selector */}
-      <div className="pointer-events-auto flex flex-col gap-1.5 rounded-2xl border border-white/[0.08] bg-[#131314]/90 p-2 shadow-2xl backdrop-blur-md">
-        {MODES.map(({ mode: value, label, hint, icon: Icon }) => (
-          <button
-            key={value}
-            type="button"
-            title={hint}
-            aria-label={label}
-            aria-pressed={mode === value}
-            onClick={() => {
-              setMode(value);
-              if (value === "draw" && activeTool === "laser") setActiveTool("pen");
-              if (value === "laser") setActiveTool("laser");
-            }}
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border transition-all cursor-pointer ${
-              mode === value
-                ? "border-white/25 bg-white/[0.12] text-white shadow-inner"
-                : "border-white/[0.06] bg-white/[0.03] text-zinc-400 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
-            }`}
-          >
-            <Icon className="h-[18px] w-[18px]" />
-          </button>
-        ))}
-      </div>
-
-      {/* Drawing Tool Settings Sub-Toolbar */}
-      {showDrawingSubbar && (
-        <div className="pointer-events-auto flex flex-col gap-2 rounded-2xl border border-white/[0.08] bg-[#131314]/95 p-2.5 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-left-2 duration-150">
-          {/* Tool selector */}
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              title="Pen"
-              onClick={() => {
-                setMode("draw");
-                setActiveTool("pen");
-              }}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors cursor-pointer ${
-                mode === "draw" && activeTool === "pen"
-                  ? "border-white/30 bg-white/15 text-white"
-                  : "border-transparent text-zinc-400 hover:bg-white/5 hover:text-white"
-              }`}
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-
-            <button
-              type="button"
-              title="Highlighter"
-              onClick={() => {
-                setMode("draw");
-                setActiveTool("highlighter");
-              }}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors cursor-pointer ${
-                mode === "draw" && activeTool === "highlighter"
-                  ? "border-white/30 bg-white/15 text-white"
-                  : "border-transparent text-zinc-400 hover:bg-white/5 hover:text-white"
-              }`}
-            >
-              <Highlighter className="h-4 w-4" />
-            </button>
-
-            <button
-              type="button"
-              title="Eraser (click or sweep over line to delete)"
-              onClick={() => {
-                setMode("draw");
-                setActiveTool("eraser");
-              }}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors cursor-pointer ${
-                mode === "draw" && activeTool === "eraser"
-                  ? "border-white/30 bg-white/15 text-white"
-                  : "border-transparent text-zinc-400 hover:bg-white/5 hover:text-white"
-              }`}
-            >
-              <Eraser className="h-4 w-4" />
-            </button>
-
-            <button
-              type="button"
-              title="Laser Pointer (temporary crimson ink)"
-              onClick={() => {
-                setMode("laser");
-                setActiveTool("laser");
-              }}
-              className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors cursor-pointer ${
-                mode === "laser"
-                  ? "border-white/30 bg-white/15 text-white"
-                  : "border-transparent text-zinc-400 hover:bg-white/5 hover:text-white"
-              }`}
-            >
-              <Sparkles className="h-4 w-4" />
-            </button>
-
-            {/* Undo & Redo Actions */}
-            {mode === "draw" && (
-              <div className="flex items-center gap-1 border-l border-white/[0.08] pl-1 ml-0.5">
-                <button
-                  type="button"
-                  title="Undo Draw (Ctrl+Z)"
-                  disabled={!canUndo}
-                  onClick={undoDraw}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </button>
-
-                <button
-                  type="button"
-                  title="Redo Draw (Ctrl+Y)"
-                  disabled={!canRedo}
-                  onClick={redoDraw}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-zinc-400 hover:bg-white/5 hover:text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                >
-                  <RotateCw className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            )}
+    <div className="pointer-events-none fixed bottom-4 left-4 z-30 flex flex-col gap-2 items-start">
+      {/* Floating Property Bar (Colors & Sizes) */}
+      {showColors && (
+        <div className="pointer-events-auto flex items-center gap-3 rounded-[12px] border border-white/10 bg-zinc-900/95 px-3 py-2 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-150">
+          {/* Color Chips */}
+          <div className="flex items-center gap-1.5">
+            {COLORS.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                title={c.label}
+                onClick={() => setStrokeColor(c.value)}
+                className={`h-5 w-5 rounded-full border transition-all cursor-pointer ${
+                  strokeColor === c.value
+                    ? "scale-110 border-white ring-2 ring-white/50"
+                    : "border-white/10 opacity-75 hover:opacity-100 hover:scale-105"
+                }`}
+                style={{ backgroundColor: c.value }}
+              />
+            ))}
           </div>
 
-          {/* Color Chips (Only shown in Draw Mode) */}
-          {showColors && (
-            <div className="grid grid-cols-4 gap-1.5 pt-1.5 border-t border-white/[0.06]">
-              {COLORS.map((c) => (
-                <button
-                  key={c.value}
-                  type="button"
-                  title={c.label}
-                  onClick={() => setStrokeColor(c.value)}
-                  className={`h-5 w-5 rounded-full border transition-transform cursor-pointer justify-self-center ${
-                    strokeColor === c.value
-                      ? "scale-110 border-white ring-2 ring-white/50"
-                      : "border-white/10 opacity-80 hover:opacity-100 hover:scale-105"
-                  }`}
-                  style={{ backgroundColor: c.value }}
-                />
-              ))}
-            </div>
-          )}
+          <div className="h-4 w-[1px] bg-white/10" />
 
-          {/* Stroke Width Selector (Only shown in Draw Mode) */}
-          {showColors && (
-            <div className="flex items-center justify-between gap-1 pt-1 border-t border-white/[0.06]">
-              {SIZES.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => setStrokeWidth(s.value)}
-                  className={`flex h-6 px-2 items-center justify-center rounded-md text-[10.5px] font-semibold transition-colors cursor-pointer ${
-                    strokeWidth === s.value
-                      ? "bg-white/20 text-white"
-                      : "text-zinc-400 hover:bg-white/5 hover:text-white"
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* Stroke Width Selector */}
+          <div className="flex items-center gap-1">
+            {SIZES.map((s) => (
+              <Button
+                key={s.value}
+                type="button"
+                variant={strokeWidth === s.value ? "secondary" : "ghost"}
+                size="xs"
+                shape="rounded"
+                onClick={() => setStrokeWidth(s.value)}
+                className="px-2 text-xs"
+              >
+                {s.label}
+              </Button>
+            ))}
+          </div>
         </div>
       )}
+
+      {/* Main Whimsical Horizontal Bottom Dock (Pure shadcn Button Architecture) */}
+      <div className="pointer-events-auto flex items-center gap-2">
+        {/* Section 1: Pointer & Grab Modes */}
+        <div className="flex items-center gap-0.5 rounded-[12px] border border-white/10 bg-zinc-900/90 p-1 shadow-2xl backdrop-blur-md">
+          <Button
+            type="button"
+            title="Select (click widget / marquee select)"
+            aria-label="Select Mode"
+            variant={mode === "select" ? "secondary" : "ghost"}
+            size="icon-sm"
+            shape="rounded"
+            onClick={() => setMode("select")}
+          >
+            <MousePointer2 className="h-4 w-4" />
+          </Button>
+
+          <Button
+            type="button"
+            title="Grab (pan canvas)"
+            aria-label="Grab Mode"
+            variant={mode === "grab" ? "secondary" : "ghost"}
+            size="icon-sm"
+            shape="rounded"
+            onClick={() => setMode("grab")}
+          >
+            <Hand className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Section 2: Drawing Tools (Pen, Highlighter, Eraser, Laser) */}
+        <div className="flex items-center gap-0.5 rounded-[12px] border border-white/10 bg-zinc-900/90 p-1 shadow-2xl backdrop-blur-md">
+          <Button
+            type="button"
+            title="Pen"
+            aria-label="Pen Tool"
+            variant={mode === "draw" && activeTool === "pen" ? "secondary" : "ghost"}
+            size="icon-sm"
+            shape="rounded"
+            onClick={() => {
+              setMode("draw");
+              setActiveTool("pen");
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+
+          <Button
+            type="button"
+            title="Highlighter"
+            aria-label="Highlighter Tool"
+            variant={mode === "draw" && activeTool === "highlighter" ? "secondary" : "ghost"}
+            size="icon-sm"
+            shape="rounded"
+            onClick={() => {
+              setMode("draw");
+              setActiveTool("highlighter");
+            }}
+          >
+            <Highlighter className="h-4 w-4" />
+          </Button>
+
+          <Button
+            type="button"
+            title="Eraser (click or sweep over stroke to delete)"
+            aria-label="Eraser Tool"
+            variant={mode === "draw" && activeTool === "eraser" ? "secondary" : "ghost"}
+            size="icon-sm"
+            shape="rounded"
+            onClick={() => {
+              setMode("draw");
+              setActiveTool("eraser");
+            }}
+          >
+            <Eraser className="h-4 w-4" />
+          </Button>
+
+          <Button
+            type="button"
+            title="Laser Pointer (temporary red ink disappears after 1s)"
+            aria-label="Laser Pointer"
+            variant={mode === "laser" ? "destructive" : "ghost"}
+            size="icon-sm"
+            shape="rounded"
+            onClick={() => {
+              setMode("laser");
+              setActiveTool("laser");
+            }}
+          >
+            <Sparkles className="h-4 w-4 text-red-400" />
+          </Button>
+        </div>
+
+        {/* Section 3: History (Undo / Redo) */}
+        <div className="flex items-center gap-0.5 rounded-[12px] border border-white/10 bg-zinc-900/90 p-1 shadow-2xl backdrop-blur-md">
+          <Button
+            type="button"
+            title="Undo (Ctrl+Z)"
+            disabled={!canUndo}
+            variant="ghost"
+            size="icon-sm"
+            shape="rounded"
+            onClick={undoDraw}
+          >
+            <RotateCcw className="h-4 w-4" />
+          </Button>
+
+          <Button
+            type="button"
+            title="Redo (Ctrl+Y)"
+            disabled={!canRedo}
+            variant="ghost"
+            size="icon-sm"
+            shape="rounded"
+            onClick={redoDraw}
+          >
+            <RotateCw className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Section 4: Zoom Controls [ - | 100% | + | ⛶ ] */}
+        <div className="flex items-center gap-0.5 rounded-[12px] border border-white/10 bg-zinc-900/90 p-1 shadow-2xl backdrop-blur-md">
+          <Button
+            type="button"
+            title="Zoom Out"
+            variant="ghost"
+            size="icon-sm"
+            shape="rounded"
+            onClick={() => zoomOut()}
+          >
+            <Minus className="h-4 w-4" />
+          </Button>
+
+          <Button
+            type="button"
+            title="Reset Zoom to 100%"
+            variant="ghost"
+            size="sm"
+            shape="rounded"
+            onClick={() => setViewport({ x: viewport.x, y: viewport.y, zoom: 1 })}
+            className="px-2 text-xs font-semibold"
+          >
+            {zoomPercentage}%
+          </Button>
+
+          <Button
+            type="button"
+            title="Zoom In"
+            variant="ghost"
+            size="icon-sm"
+            shape="rounded"
+            onClick={() => zoomIn()}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+
+          <div className="h-4 w-[1px] bg-white/10 mx-0.5" />
+
+          <Button
+            type="button"
+            title="Fit View"
+            variant="ghost"
+            size="icon-sm"
+            shape="rounded"
+            onClick={() => fitView({ padding: 0.15 })}
+          >
+            <Maximize2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
