@@ -2,18 +2,16 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { acceptInvitationAction, rejectInvitationAction, type InvitationActionState } from "@/lib/actions/invitations";
 
 const INITIAL: InvitationActionState = {};
 
-function SubmitButton({ children, variant }: { children: React.ReactNode; variant?: "outline" }) {
-  // useFormStatus reads the enclosing form, so each button knows whether it is
-  // the one currently submitting without threading state down by hand.
+function SubmitButton({ children, variant, badgeIcon }: { children: React.ReactNode; variant?: "outline" | "default"; badgeIcon?: React.ReactNode }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" size="lg" variant={variant} disabled={pending} className="w-full justify-center gap-2">
+    <Button type="submit" size="lg" variant={variant} disabled={pending} badgeIcon={badgeIcon}>
       {pending && <Loader2 className="size-4 animate-spin" />}
       {children}
     </Button>
@@ -36,7 +34,7 @@ export function InvitationDecision({ invitationId }: { invitationId: string }) {
 
       <form action={accept}>
         <input type="hidden" name="invitationId" value={invitationId} />
-        <SubmitButton>Accept invitation</SubmitButton>
+        <SubmitButton badgeIcon={<ArrowRight className="size-4" />}>Accept invitation</SubmitButton>
       </form>
 
       <form action={reject}>

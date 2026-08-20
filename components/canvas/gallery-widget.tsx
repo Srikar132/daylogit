@@ -5,6 +5,7 @@ import { AlertCircle, ChevronRight, Images, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useCanvasActions } from "@/components/canvas/canvas-actions-context";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -87,22 +88,25 @@ function DraftAlbumForm({ id, canWrite }: { id: string; canWrite: boolean }) {
 
       <div className="relative z-10 flex items-center justify-end gap-2 pt-2">
         {canWrite && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => deleteWidget(id)}
-            className="rounded-full px-3.5 py-1.5 text-[12px] font-medium text-widget-text-secondary hover:bg-white/[0.06] hover:text-widget-text-primary transition-colors cursor-pointer"
+            className="text-widget-text-secondary hover:text-widget-text-primary"
           >
             Cancel
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="submit"
+          variant="default"
+          size="sm"
           disabled={createMutation.isPending}
-          className="widget-btn-primary inline-flex items-center gap-1.5 px-4 py-1.5 text-[12px] disabled:opacity-60 cursor-pointer"
+          badgeIcon={<Plus className="h-3.5 w-3.5" />}
         >
-          <Plus className="h-3.5 w-3.5" />
           {createMutation.isPending ? "Creating…" : "Create Gallery"}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -269,9 +273,11 @@ function GalleryCardBody({
         <Link
           href={slug ? `/workspace/${slug}/albums/${albumId}` : "#"}
           title="Open gallery"
-          className="nodrag widget-btn-glass flex h-8 w-8 shrink-0 items-center justify-center cursor-pointer"
+          className="nodrag"
         >
-          <ChevronRight className="h-4 w-4" />
+          <Button type="button" variant="default" size="icon-xs" className="cursor-pointer">
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
         </Link>
       </div>
     </div>

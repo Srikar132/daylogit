@@ -2,6 +2,7 @@
 
 import { ArrowUpRight, ExternalLink, FolderGit2, GitBranch, Globe, Lock } from "lucide-react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import type { DocProjectSummary } from "@/lib/actions/docs";
 import { formatGithubLabel, formatLiveHost } from "@/components/canvas/project-doc-format";
 
@@ -121,12 +122,16 @@ export function ProjectDocCardBody({
       <div className="relative z-10 flex shrink-0 items-center justify-between border-t border-white/[0.06] pt-2.5 mt-2">
         <span className="text-[10.5px] font-medium text-widget-text-secondary">Doc Hub</span>
 
-        <Link
-          href={slug ? `/workspace/${slug}/docs/${docProjectId}` : "#"}
-          className="nodrag widget-btn-glass inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold cursor-pointer"
-        >
-          <span>Open Spec</span>
-          <ArrowUpRight className="h-3 w-3" />
+        <Link href={slug ? `/workspace/${slug}/docs/${docProjectId}` : "#"} className="nodrag">
+          <Button
+            type="button"
+            variant="default"
+            size="xs"
+            className="cursor-pointer"
+            badgeIcon={<ArrowUpRight className="h-3 w-3" />}
+          >
+            Open Spec
+          </Button>
         </Link>
       </div>
     </div>

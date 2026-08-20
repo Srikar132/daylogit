@@ -11,6 +11,7 @@ import { isWidgetResizable } from "@/components/canvas/widget-registry";
 import { BoardWidget } from "@/components/canvas/board-widget";
 import { BookmarkWidget } from "@/components/canvas/bookmark-widget";
 import { CodeWidget } from "@/components/canvas/code-widget";
+import { DrawWidget } from "@/components/canvas/draw-widget";
 import { GalleryWidget } from "@/components/canvas/gallery-widget";
 import { MailSummaryWidget } from "@/components/canvas/mail-summary-widget";
 import { MediaWidget } from "@/components/canvas/media-widget";
@@ -75,6 +76,8 @@ function renderWidgetBody(id: string, data: WidgetNodeData): React.ReactNode {
       return <BookmarkWidget id={id} canWrite={data.canWrite} widgetData={data.widgetData} />;
     case "code":
       return <CodeWidget id={id} slug={data.slug ?? ""} canWrite={data.canWrite} widgetData={data.widgetData} />;
+    case "draw":
+      return <DrawWidget id={id} canWrite={data.canWrite} widgetData={data.widgetData} />;
     case "gallery": {
       const albumId = data.widgetData?.albumId;
       return (
@@ -211,6 +214,10 @@ export function WidgetNode({ id, data, selected }: NodeProps) {
     widgetData.widgetType === "media"
       ? undefined
       : (widgetData.widgetData?.bgColor as string | undefined);
+
+  if (widgetData.widgetType === "draw") {
+    return <DrawWidget id={id} canWrite={widgetData.canWrite} widgetData={widgetData.widgetData} />;
+  }
 
   return (
     <div

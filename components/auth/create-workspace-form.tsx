@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +25,7 @@ export function CreateWorkspaceForm() {
         <Label htmlFor="name">Workspace name</Label>
         <Input id="name" name="name" placeholder="e.g. Acme Team" autoFocus required />
       </div>
-      <Button type="submit" size="lg" disabled={isPending} className="justify-center">
+      <Button type="submit" size="lg" disabled={isPending} badgeIcon={<ArrowRight className="h-4 w-4" />}>
         {isPending ? "Creating…" : "Create workspace"}
       </Button>
     </form>
