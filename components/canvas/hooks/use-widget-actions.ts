@@ -1,6 +1,6 @@
 import type { Node } from "@xyflow/react";
 import { useMutation } from "@tanstack/react-query";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { AUTO_HEIGHT_MIN, NEW_WIDGET_DEFAULTS, buildNode, type WidgetNodeContext } from "@/components/canvas/widget-registry";
 import { WIDGET_SAVE_RETRY, type SaveStatus } from "@/components/canvas/hooks/use-save-status";
 import { createWidgetAction, deleteWidgetAction, updateWidgetDataAction, updateWidgetSizeAction } from "@/lib/actions/widgets";
@@ -43,6 +43,33 @@ export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActions
     onSuccess: reportSaveSucceeded,
   });
 
+  const updateSaveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const latestWidgetDataRef = useRef<Map<string, Record<string, unknown>>>(new Map());
+
+  // Guarantee 100% batch data safety — flush any pending debounced DB writes
+  // before the user closes or refreshes the browser tab.
+  useEffect(() => {
+    const timers = updateSaveTimers.current;
+    const latestData = latestWidgetDataRef.current;
+
+    function flushPendingSaves() {
+      timers.forEach((timer, id) => {
+        clearTimeout(timer);
+        const data = latestData.get(id);
+        if (data) {
+          saveWidgetData({ id, widgetData: data });
+        }
+      });
+      timers.clear();
+    }
+
+    window.addEventListener("beforeunload", flushPendingSaves);
+    return () => {
+      window.removeEventListener("beforeunload", flushPendingSaves);
+      flushPendingSaves();
+    };
+  }, [saveWidgetData]);
+
   const updateWidgetData = useCallback(
     (id: string, widgetData: Record<string, unknown>) => {
       // Rebuilt as plain JSON before it crosses the server-action boundary:
@@ -51,8 +78,21 @@ export function useWidgetActions({ ctx, setNodes, saveStatus }: UseWidgetActions
       // while attribute-less marks like bold came through fine. See
       // lib/plain-json.ts.
       const plain = toPlainJson(widgetData);
+      latestWidgetDataRef.current.set(id, plain);
       setNodes((current) => current.map((n) => (n.id === id ? { ...n, data: { ...n.data, widgetData: plain } } : n)));
-      saveWidgetData({ id, widgetData: plain });
+
+      // Debounce DB saves for high-frequency updates (like "draw" strokes)
+      // to protect Neon Postgres free tier limits from being overwhelmed
+      const existingTimer = updateSaveTimers.current.get(id);
+      if (existingTimer) clearTimeout(existingTimer);
+
+      updateSaveTimers.current.set(
+        id,
+        setTimeout(() => {
+          updateSaveTimers.current.delete(id);
+          saveWidgetData({ id, widgetData: plain });
+        }, 1200),
+      );
     },
     [setNodes, saveWidgetData],
   );
