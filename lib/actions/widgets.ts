@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { and, count, eq } from "drizzle-orm";
-import { db, widgets, type WidgetLayoutItem } from "@/lib/db";
+import { db, landmarks, widgets, type WidgetLayoutItem } from "@/lib/db";
 import { requireViewerContext } from "@/lib/workspace";
 import { mergeWithDefaults } from "@/components/canvas/widget-registry";
 import { canWriteWidgets } from "@/lib/permissions";
@@ -216,7 +216,26 @@ export async function deleteWidgetAction(id: string): Promise<{ error?: string }
   const rateLimit = await checkRateLimit(`delete-widget:${viewer.userId}`);
   if (!rateLimit.success) return { error: rateLimit.error };
 
+  const [existing] = await db
+    .select({ type: widgets.type, data: widgets.data })
+    .from(widgets)
+    .where(widgetWhere(parsedId.data, viewer.organizationId))
+    .limit(1);
+  if (!existing) return { error: MISSING_WIDGET_ERROR };
+
   await db.delete(widgets).where(widgetWhere(parsedId.data, viewer.organizationId));
+
+  // A landmark widget owns its landmarks row — deleting the pin deletes the
+  // named place with it (and frees its slug for reuse).
+  const landmarkId =
+    existing.type === "landmark"
+      ? (existing.data as { landmarkId?: unknown } | null)?.landmarkId
+      : undefined;
+  if (typeof landmarkId === "string") {
+    await db
+      .delete(landmarks)
+      .where(and(eq(landmarks.id, landmarkId), eq(landmarks.organizationId, viewer.organizationId)));
+  }
 
   return {};
 }

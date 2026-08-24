@@ -1,11 +1,12 @@
 import type { Node } from "@xyflow/react";
 import type { WidgetNodeData } from "@/components/canvas/widget-node";
-import type { WidgetLayoutItem } from "@/lib/db";
+import { type WidgetLayoutItem } from "@/lib/db";
 import type { BoardColumn } from "@/lib/worklog";
 import type { DocProjectSummary } from "@/lib/actions/docs";
 import type { AlbumPreview } from "@/lib/actions/albums";
 import type { GmailStatus } from "@/lib/actions/gmail";
 import type { GmailMessageSummary } from "@/lib/gmail";
+import type { Landmark } from "@/lib/actions/landmarks";
 
 /**
  * Single source of truth for "what widget types exist and how they behave."
@@ -13,19 +14,20 @@ import type { GmailMessageSummary } from "@/lib/gmail";
  * canvas-shell.tsx's component body.
  */
 
-export const MULTI_INSTANCE_WIDGET_TYPES = new Set(["bookmark", "code", "draw", "gallery", "markdown", "media", "project-doc"]);
+export const MULTI_INSTANCE_WIDGET_TYPES = new Set(["bookmark", "code", "draw", "gallery", "landmark", "markdown", "media", "project-doc"]);
 export const KNOWN_WIDGET_TYPES = new Set([
   "board",
   "bookmark",
   "code",
   "draw",
   "gallery",
+  "landmark",
   "mail-summary",
   "markdown",
   "media",
   "project-doc",
 ]);
-export const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary", "bookmark", "code", "draw", "gallery"]);
+export const NON_RESIZABLE_WIDGET_TYPES = new Set(["board", "mail-summary", "bookmark", "code", "draw", "gallery", "landmark"]);
 
 // Floor for widget types that auto-size to content (no persisted height yet)
 // — without this an almost-empty note would render as a sliver. Height still
@@ -80,6 +82,11 @@ export const NEW_WIDGET_DEFAULTS: Record<string, { width: number; height?: numbe
   // Height omitted — the card grows by one line once a generated exercise gives
   // it a title, and nothing about it scrolls.
   code: { width: 320 },
+
+  // Draft-form footprint — the creation form (pin preview + name + palette)
+  // needs real room. Once saved it shrinks to the compact pin via
+  // LANDMARK_PIN_SIZE in landmark-widget.tsx.
+  landmark: { width: 300, height: 400 },
 };
 
 // Deliberately just plain data — no callbacks here. Mutation handlers
@@ -94,6 +101,9 @@ export type WidgetNodeContext = {
   initialAlbumPreviews: Record<string, AlbumPreview>;
   initialGmailStatus: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
+  /** Server-prefetched landmarks, keyed by landmark id — same batching
+   *  precedent as initialProjectSummaries above. */
+  initialLandmarks?: Record<string, Landmark>;
 };
 
 /**
@@ -123,6 +133,8 @@ function isDraftWidget(type: string, widgetData?: Record<string, unknown>): bool
       return typeof widgetData?.pendingUrl !== "string" && typeof widgetData?.url !== "string";
     case "gallery":
       return typeof widgetData?.albumId !== "string";
+    case "landmark":
+      return typeof widgetData?.landmarkId !== "string";
     default:
       return false;
   }
@@ -146,6 +158,8 @@ export function widgetTitle(type: string): string {
       return "Media";
     case "project-doc":
       return "Project";
+    case "landmark":
+      return "Landmark";
     default:
       return type;
   }
@@ -187,6 +201,7 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
 
   const docProjectId = item.type === "project-doc" ? (item.data?.docProjectId as string | undefined) : undefined;
   const albumId = item.type === "gallery" ? (item.data?.albumId as string | undefined) : undefined;
+  const landmarkId = item.type === "landmark" ? (item.data?.landmarkId as string | undefined) : undefined;
 
   const data: WidgetNodeData = {
     title: widgetTitle(item.type),
@@ -203,6 +218,7 @@ export function buildNode(item: WidgetLayoutItem, ctx: WidgetNodeContext): Node 
     initialPreview: albumId ? ctx.initialAlbumPreviews[albumId] : undefined,
     initialGmailStatus: item.type === "mail-summary" ? ctx.initialGmailStatus : undefined,
     initialGmailMessages: item.type === "mail-summary" ? ctx.initialGmailMessages : undefined,
+    initialLandmark: landmarkId ? ctx.initialLandmarks?.[landmarkId] : undefined,
   };
 
   return {

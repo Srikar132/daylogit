@@ -1,9 +1,10 @@
 "use client";
 
 import "@xyflow/react/dist/style.css";
-import { ReactFlow, ReactFlowProvider, Controls, MiniMap, useReactFlow } from "@xyflow/react";
+import { ReactFlow, ReactFlowProvider, MiniMap, useReactFlow } from "@xyflow/react";
+
 import { DndContext, DragOverlay } from "@dnd-kit/core";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { WidgetNode, type WidgetNodeData } from "@/components/canvas/widget-node";
 import { WidgetToolbar, ToolbarDragGhost } from "@/components/canvas/widget-toolbar";
@@ -25,6 +26,7 @@ import type { DocProjectSummary } from "@/lib/actions/docs";
 import type { AlbumPreview } from "@/lib/actions/albums";
 import type { GmailStatus } from "@/lib/actions/gmail";
 import type { GmailMessageSummary } from "@/lib/gmail";
+import { Landmark } from "@/lib/actions/landmarks";
 
 const nodeTypes = { widget: WidgetNode };
 
@@ -37,6 +39,9 @@ interface CanvasShellProps {
   initialAlbumPreviews: Record<string, AlbumPreview>;
   initialGmailStatus: GmailStatus;
   initialGmailMessages?: GmailMessageSummary[];
+  initialLandmarks: Record<string, Landmark>;
+  /** The workspace's HOME landmark — the canvas opens centered on it. */
+  initialDefaultLandmark?: Landmark | null;
 }
 
 function CanvasInner({
@@ -48,6 +53,8 @@ function CanvasInner({
   initialAlbumPreviews,
   initialGmailStatus,
   initialGmailMessages,
+  initialLandmarks,
+  initialDefaultLandmark,
 }: CanvasShellProps) {
   const ctx: WidgetNodeContext = useMemo(
     () => ({
@@ -58,6 +65,7 @@ function CanvasInner({
       initialAlbumPreviews,
       initialGmailStatus,
       initialGmailMessages,
+      initialLandmarks,
     }),
     [
       columns,
@@ -67,6 +75,7 @@ function CanvasInner({
       initialAlbumPreviews,
       initialGmailStatus,
       initialGmailMessages,
+      initialLandmarks,
     ],
   );
 
@@ -95,7 +104,37 @@ function CanvasInner({
 
   const flowProps = FLOW_PROPS_BY_MODE[mode];
 
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, setCenter } = useReactFlow();
+
+  // Landmark coords ARE the owning widget's position (the pin is the place).
+  // Smooth when the user navigates from search; instant on first paint.
+  const flyToLandmark = useCallback(
+    (landmarkId: string, duration?: number) => {
+      const node = nodes.find(
+        (n) => (n.data as unknown as WidgetNodeData).widgetData?.landmarkId === landmarkId,
+      );
+      if (!node) return false;
+      const width = node.measured?.width ?? node.width ?? 150;
+      const height = node.measured?.height ?? node.height ?? 150;
+      setCenter(node.position.x + width / 2, node.position.y + height / 2, {
+        zoom: 1,
+        duration,
+      });
+      return true;
+    },
+    [nodes, setCenter],
+  );
+
+  // Open at HOME: center the default landmark once nodes exist, instead of
+  // the generic fitView — one server-fetched row decides where "here" is.
+  const didOpenAtHome = useRef(false);
+  useEffect(() => {
+    if (didOpenAtHome.current || !initialDefaultLandmark) return;
+    if (flyToLandmark(initialDefaultLandmark.id)) {
+      didOpenAtHome.current = true;
+    }
+  }, [initialDefaultLandmark, flyToLandmark]);
+
   const { dndSensors, draggingType, handleDragStart, handleDragEnd } = useToolbarDrag({
     addWidget,
     screenToFlowPosition,
@@ -205,48 +244,48 @@ function CanvasInner({
           redoDraw,
         }}
       >
-      <CanvasActionsProvider
-        value={{
-          widgets: widgetSummaries,
-          addWidget,
-          updateWidgetData,
-          deleteWidget,
-          pushDrawHistory,
-          getPendingFile,
-          clearPendingFile,
-          resizeWidget,
-          setWidgetDraggable,
-          setWidgetSelected,
-        }}
-      >
-        <div className="relative h-full w-full" onDragOver={handleDragOverCanvas} onDrop={handleDropOnCanvas}>
-          <ReactFlow
-            nodes={nodes}
-            onNodesChange={onNodesChange}
-            nodeTypes={nodeTypes}
-            minZoom={0.3}
-            maxZoom={1.5}
-            fitView
-            fitViewOptions={{ padding: 0.15 }}
-            proOptions={{ hideAttribution: true }}
-            className={`bg-[#1e1f20] ${CANVAS_CLASS_BY_MODE[mode]}`}
-            {...flowProps}
-            // Off-screen widgets stop mounting entirely — their own data
-            // fetching (useQuery, Tiptap init, etc.) doesn't fire until
-            // scrolled into view, so this scales down with widget count
-            // instead of fighting the fetching work already done.
-            onlyRenderVisibleElements
-          >
-            {/* Fixed-pixel minimap eats too much of a phone screen to be
+        <CanvasActionsProvider
+          value={{
+            widgets: widgetSummaries,
+            addWidget,
+            updateWidgetData,
+            deleteWidget,
+            pushDrawHistory,
+            getPendingFile,
+            clearPendingFile,
+            resizeWidget,
+            setWidgetDraggable,
+            setWidgetSelected,
+          }}
+        >
+          <div className="relative h-full w-full" onDragOver={handleDragOverCanvas} onDrop={handleDropOnCanvas}>
+            <ReactFlow
+              nodes={nodes}
+              onNodesChange={onNodesChange}
+              nodeTypes={nodeTypes}
+              minZoom={0.3}
+              maxZoom={1.5}
+              fitView
+              fitViewOptions={{ padding: 0.15 }}
+              proOptions={{ hideAttribution: true }}
+              className={`bg-[#1e1f20] ${CANVAS_CLASS_BY_MODE[mode]}`}
+              {...flowProps}
+              // Off-screen widgets stop mounting entirely — their own data
+              // fetching (useQuery, Tiptap init, etc.) doesn't fire until
+              // scrolled into view, so this scales down with widget count
+              // instead of fighting the fetching work already done.
+              onlyRenderVisibleElements
+            >
+              {/* Fixed-pixel minimap eats too much of a phone screen to be
                 worth the nav benefit there — hidden below md, same call
                 Miro/tldraw make on mobile. */}
-            <MiniMap className="hidden !rounded-xl !border !border-white/[0.06] md:block" />
-          </ReactFlow>
-          <DrawCanvasOverlay />
-        </div>
-      </CanvasActionsProvider>
+              <MiniMap className="hidden !rounded-xl !border !border-white/[0.06] md:block" />
+            </ReactFlow>
+            <DrawCanvasOverlay />
+          </div>
+        </CanvasActionsProvider>
 
-      <CanvasModeToolbar />
+        <CanvasModeToolbar addWidgetAtViewportCenter={addWidgetAtViewportCenter} flyToLandmark={flyToLandmark} />
       </CanvasModeProvider>
 
       <WidgetToolbar canWrite={canWrite} onAdd={addWidgetAtViewportCenter} />
