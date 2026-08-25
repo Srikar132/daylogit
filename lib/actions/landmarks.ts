@@ -1,6 +1,6 @@
 "use server";
 
-import { and, asc, count, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray, like } from "drizzle-orm";
 import { z } from "zod";
 import { db, landmarks } from "@/lib/db";
 import { requireViewerContext } from "@/lib/workspace";
@@ -28,15 +28,18 @@ function slugify(name: string): string {
     .slice(0, 60);
 }
 
-/** First free `<slug>`, `<slug>-2`, `<slug>-3`… within THIS workspace. Two
- *  workspaces can each have `home`; the (organization_id, slug) unique index
- *  is the real backstop if two members race the same name. */
+/** First free `<slug>`, `<slug>-2`, `<slug>-3`… within THIS workspace. The
+ *  prefix filter runs in Postgres (indexed range scan on (organization_id,
+ *  slug)), and only exact-or-`-<n>` suffixed matches count — `home` must not
+ *  collide with an unrelated `homework`. The (organization_id, slug) unique
+ *  index is the backstop if two members race the same name. */
 async function uniqueSlug(organizationId: string, name: string): Promise<string> {
   const base = slugify(name) || "landmark";
+  // slugify output is [a-z0-9-] only, so base needs no LIKE escaping.
   const rows = await db
     .select({ slug: landmarks.slug })
     .from(landmarks)
-    .where(eq(landmarks.organizationId, organizationId));
+    .where(and(eq(landmarks.organizationId, organizationId), like(landmarks.slug, `${base}%`)));
   const taken = new Set(
     rows.map((row) => row.slug).filter((slug) => slug === base || slug.startsWith(`${base}-`)),
   );

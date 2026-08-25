@@ -1,10 +1,10 @@
 "use client";
 
 import "@xyflow/react/dist/style.css";
-import { ReactFlow, ReactFlowProvider, MiniMap, useReactFlow } from "@xyflow/react";
+import { ReactFlow, ReactFlowProvider, useReactFlow, type ReactFlowInstance } from "@xyflow/react";
 
 import { DndContext, DragOverlay } from "@dnd-kit/core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { WidgetNode, type WidgetNodeData } from "@/components/canvas/widget-node";
 import { WidgetToolbar, ToolbarDragGhost } from "@/components/canvas/widget-toolbar";
@@ -125,15 +125,27 @@ function CanvasInner({
     [nodes, setCenter],
   );
 
-  // Open at HOME: center the default landmark once nodes exist, instead of
-  // the generic fitView — one server-fetched row decides where "here" is.
-  const didOpenAtHome = useRef(false);
-  useEffect(() => {
-    if (didOpenAtHome.current || !initialDefaultLandmark) return;
-    if (flyToLandmark(initialDefaultLandmark.id)) {
-      didOpenAtHome.current = true;
-    }
-  }, [initialDefaultLandmark, flyToLandmark]);
+  // Open at HOME: decided once, at flow init — before this ran in a mount
+  // effect that raced xyflow's own fitView application (fitView fired after
+  // us and won, so the canvas opened fitted instead of centered on HOME).
+  // No default landmark (or its pin is gone) → fall back to fitting widgets.
+  const handleFlowInit = useCallback(
+    (instance: ReactFlowInstance) => {
+      const target = initialDefaultLandmark
+        ? instance
+          .getNodes()
+          .find((n) => (n.data as unknown as WidgetNodeData).widgetData?.landmarkId === initialDefaultLandmark.id)
+        : undefined;
+      if (!target) {
+        instance.fitView({ padding: 0.15 });
+        return;
+      }
+      const width = target.measured?.width ?? target.width ?? 150;
+      const height = target.measured?.height ?? target.height ?? 150;
+      instance.setCenter(target.position.x + width / 2, target.position.y + height / 2, { zoom: 1 });
+    },
+    [initialDefaultLandmark],
+  );
 
   const { dndSensors, draggingType, handleDragStart, handleDragEnd } = useToolbarDrag({
     addWidget,
@@ -265,8 +277,7 @@ function CanvasInner({
               nodeTypes={nodeTypes}
               minZoom={0.3}
               maxZoom={1.5}
-              fitView
-              fitViewOptions={{ padding: 0.15 }}
+              onInit={handleFlowInit}
               proOptions={{ hideAttribution: true }}
               className={`bg-[#1e1f20] ${CANVAS_CLASS_BY_MODE[mode]}`}
               {...flowProps}
@@ -279,7 +290,7 @@ function CanvasInner({
               {/* Fixed-pixel minimap eats too much of a phone screen to be
                 worth the nav benefit there — hidden below md, same call
                 Miro/tldraw make on mobile. */}
-              <MiniMap className="hidden !rounded-xl !border !border-white/[0.06] md:block" />
+              {/* <MiniMap className="hidden !rounded-xl !border !border-white/[0.06] md:block" /> */}
             </ReactFlow>
             <DrawCanvasOverlay />
           </div>
